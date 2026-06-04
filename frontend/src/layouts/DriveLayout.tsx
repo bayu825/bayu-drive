@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   Bell,
@@ -12,13 +12,11 @@ import {
   Share2,
   SlidersHorizontal,
   Star,
-  UserPlus,
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { BrandLogo } from '@/components/drive/BrandLogo'
-import { DummyModal } from '@/components/drive/DummyModal'
 import { Input } from '@/components/ui/input'
 import { apiFetch, formatBytes } from '@/lib/api'
 import { clearAuthSession, getStoredUser, updateStoredUser, type AuthUser } from '@/lib/auth'
@@ -37,15 +35,6 @@ type StorageSummary = {
   usedBytes: string
   availableBytes: string
 }
-
-type BackendFile = {
-  id: string
-  name: string
-  mimeType: string
-  sizeBytes: string
-}
-
-type InviteFolder = { id: string; name: string }
 
 type StorageBreakdown = {
   photo: number
@@ -120,23 +109,14 @@ function Sidebar({ onNavigate, user, storage, breakdown, onLogout }: { onNavigat
 export function DriveLayout() {
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [inviteOpen, setInviteOpen] = useState(false)
   const [user, setUser] = useState<AuthUser | null>(getStoredUser())
   const [storage, setStorage] = useState<StorageSummary | null>(null)
   const [breakdown, setBreakdown] = useState<StorageBreakdown>({ photo: 0, video: 0, document: 0 })
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState('viewer')
-  const [inviteTargetType, setInviteTargetType] = useState<'file' | 'folder'>('file')
-  const [inviteTargetId, setInviteTargetId] = useState('')
-  const [inviteFiles, setInviteFiles] = useState<BackendFile[]>([])
-  const [inviteFolders, setInviteFolders] = useState<InviteFolder[]>([])
-  const [inviteMessage, setInviteMessage] = useState('')
-  const [inviting, setInviting] = useState(false)
 
   async function loadSidebarStats() {
     await Promise.all([
       apiFetch<StorageSummary>('/storage/summary').then(setStorage),
-      apiFetch<{ files: BackendFile[] }>('/files').then((data) => {
+      apiFetch<{ files: Array<{ mimeType: string; sizeBytes: string }> }>('/files').then((data) => {
         const next = { photo: 0, video: 0, document: 0 }
         for (const file of data.files) {
           const size = Number(file.sizeBytes)
@@ -165,34 +145,6 @@ export function DriveLayout() {
     await apiFetch('/auth/logout', { method: 'POST' }).catch(() => undefined)
     clearAuthSession()
     navigate('/login')
-  }
-
-  async function loadInviteTargets() {
-    const [fileData, folderData] = await Promise.all([
-      apiFetch<{ files: BackendFile[] }>('/files'),
-      apiFetch<{ folders: InviteFolder[] }>('/folders?all=1'),
-    ])
-    setInviteFiles(fileData.files)
-    setInviteFolders(folderData.folders)
-    const targets = inviteTargetType === 'file' ? fileData.files : folderData.folders
-    if (!targets.some((target) => target.id === inviteTargetId)) setInviteTargetId(targets[0]?.id ?? '')
-  }
-
-  async function sendInvite(event: FormEvent) {
-    event.preventDefault()
-    setInviting(true)
-    setInviteMessage('')
-    try {
-      await apiFetch('/invites', { method: 'POST', body: JSON.stringify({ email: inviteEmail, role: inviteRole, targetType: inviteTargetType, targetId: inviteTargetId }) })
-      setInviteEmail('')
-      setInviteRole('viewer')
-      setInviteMessage('Invite saved. Member will appear in Shared.')
-      window.dispatchEvent(new Event('9drive:invites-changed'))
-    } catch (error) {
-      setInviteMessage(error instanceof Error ? error.message : 'Failed to send invite')
-    } finally {
-      setInviting(false)
-    }
   }
 
   return (
@@ -228,22 +180,11 @@ export function DriveLayout() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Button variant="outline" size="icon" aria-label="Notifications"><Bell className="h-5 w-5" /></Button>
-              <Button variant="outline" onClick={() => { setInviteOpen(true); loadInviteTargets().catch(() => setInviteMessage('Failed to load files and folders')) }}><UserPlus className="h-5 w-5" />Invite Members</Button>
             </div>
           </header>
           <Outlet />
         </section>
       </div>
-      <DummyModal open={inviteOpen} title="Invite Members" description="Invite a member to your 9Drive workspace." onClose={() => setInviteOpen(false)}>
-        <form onSubmit={sendInvite} className="grid gap-4">
-          <label className="grid gap-2 text-sm font-semibold">Email Address<Input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="member@example.com" required /></label>
-          <label className="grid gap-2 text-sm font-semibold">Role<select className="h-11 rounded-xl border border-slate-200 px-3 text-sm" value={inviteRole} onChange={(event) => setInviteRole(event.target.value)}><option value="viewer">Can view</option><option value="editor">Can edit</option></select></label>
-          <label className="grid gap-2 text-sm font-semibold">Share Type<select className="h-11 rounded-xl border border-slate-200 px-3 text-sm" value={inviteTargetType} onChange={(event) => { const nextType = event.target.value as 'file' | 'folder'; setInviteTargetType(nextType); const nextTargets = nextType === 'file' ? inviteFiles : inviteFolders; setInviteTargetId(nextTargets[0]?.id ?? '') }}><option value="file">File</option><option value="folder">Folder</option></select></label>
-          <label className="grid gap-2 text-sm font-semibold">{inviteTargetType === 'file' ? 'File' : 'Folder'}<select className="h-11 rounded-xl border border-slate-200 px-3 text-sm" value={inviteTargetId} onChange={(event) => setInviteTargetId(event.target.value)} required><option value="">Select {inviteTargetType}</option>{(inviteTargetType === 'file' ? inviteFiles : inviteFolders).map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}</select></label>
-          {inviteMessage ? <p className="rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{inviteMessage}</p> : null}
-          <div className="flex justify-end gap-3 pt-2"><Button type="button" variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button><Button disabled={inviting || !inviteTargetId}>{inviting ? 'Sending...' : 'Send Invite'}</Button></div>
-        </form>
-      </DummyModal>
     </main>
   )
 }
