@@ -19,6 +19,8 @@ export function SettingsPage() {
   const [disconnectingAccountId, setDisconnectingAccountId] = useState<string | null>(null)
   const [accountToDisconnect, setAccountToDisconnect] = useState<ConnectedAccount | null>(null)
   const [profileImageUrl, setProfileImageUrl] = useState('')
+  const [selectedAccountId, setSelectedAccountId] = useState('')
+  const selectedAccount = accounts.find((account) => account.id === selectedAccountId) ?? accounts[0] ?? null
 
   async function load() {
     const data = await apiFetch<{ accounts: ConnectedAccount[] }>('/connected-accounts')
@@ -32,6 +34,14 @@ export function SettingsPage() {
   useEffect(() => {
     getGravatarUrl(user?.email, 96).then(setProfileImageUrl).catch(() => setProfileImageUrl(''))
   }, [user?.email])
+
+  useEffect(() => {
+    if (accounts.length === 0) {
+      setSelectedAccountId('')
+      return
+    }
+    if (!accounts.some((account) => account.id === selectedAccountId)) setSelectedAccountId(accounts[0].id)
+  }, [accounts, selectedAccountId])
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -109,15 +119,16 @@ export function SettingsPage() {
           <Card className="p-5">
             <h2 className="font-extrabold">Connected Google Accounts</h2>
             <div className="mt-4 grid gap-3">
-              {accounts.length === 0 ? <p className="text-sm text-slate-500">No connected Google Drive account yet.</p> : accounts.map((account) => (
-                <div key={account.id} className="rounded-xl bg-slate-50 p-4">
+              {accounts.length === 0 ? <p className="text-sm text-slate-500">No connected Google Drive account yet.</p> : <>
+                <label className="grid gap-2 text-sm font-semibold">Choose Account<select className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm" value={selectedAccount?.id ?? ''} onChange={(event) => setSelectedAccountId(event.target.value)}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.email} ({account.status})</option>)}</select></label>
+                {selectedAccount ? <div className="rounded-xl bg-slate-50 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div><p className="font-semibold">{account.email}</p><p className="text-sm text-slate-500">{account.status}</p></div>
-                    <div className="flex gap-2"><Button variant="outline" onClick={() => sync(account.id)} disabled={syncingAccountId === account.id}><RefreshCw className={syncingAccountId === account.id ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{syncingAccountId === account.id ? 'Syncing...' : 'Sync'}</Button><Button variant="danger" onClick={() => setAccountToDisconnect(account)}><Trash2 className="h-4 w-4" />Disconnect</Button></div>
+                    <div><p className="break-all font-semibold">{selectedAccount.email}</p><p className="text-sm text-slate-500">{selectedAccount.status}</p></div>
+                    <div className="flex gap-2"><Button variant="outline" onClick={() => sync(selectedAccount.id)} disabled={syncingAccountId === selectedAccount.id}><RefreshCw className={syncingAccountId === selectedAccount.id ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{syncingAccountId === selectedAccount.id ? 'Syncing...' : 'Sync'}</Button><Button variant="danger" onClick={() => setAccountToDisconnect(selectedAccount)}><Trash2 className="h-4 w-4" />Disconnect</Button></div>
                   </div>
-                  <p className="mt-3 text-sm text-slate-500">{formatBytes(account.storageAccount?.usedBytes)} used of {formatBytes(account.storageAccount?.totalBytes)}. Available {formatBytes(account.storageAccount?.availableBytes)}.</p>
-                </div>
-              ))}
+                  <p className="mt-3 text-sm text-slate-500">{formatBytes(selectedAccount.storageAccount?.usedBytes)} used of {formatBytes(selectedAccount.storageAccount?.totalBytes)}. Available {formatBytes(selectedAccount.storageAccount?.availableBytes)}.</p>
+                </div> : null}
+              </>}
             </div>
           </Card>
         </div>
