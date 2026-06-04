@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, type MouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Archive, CheckCircle, ChevronDown, Folder, FolderPlus, LayoutGrid, List, MoreVertical, Star, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -58,6 +58,7 @@ export function AllFilesPage() {
   const [allFolders, setAllFolders] = useState<FolderItem[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [selectedFolderId, setSelectedFolderId] = useState('')
+  const [isUploadDragging, setIsUploadDragging] = useState(false)
   const [folderName, setFolderName] = useState('')
   const [folderColor, setFolderColor] = useState('text-blue-500')
   const [renameValue, setRenameValue] = useState('')
@@ -160,6 +161,19 @@ export function AllFilesPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  function selectUploadFile(file: File | null | undefined) {
+    if (!file) return
+    setSelectedFile(file)
+  }
+
+  function handleUploadDrag(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.type === 'dragenter' || event.type === 'dragover') setIsUploadDragging(true)
+    if (event.type === 'dragleave' || event.type === 'drop') setIsUploadDragging(false)
+    if (event.type === 'drop') selectUploadFile(event.dataTransfer.files[0])
   }
 
   function uploadWithProgress(form: FormData, onProgress: (percent: number) => void) {
@@ -319,7 +333,12 @@ export function AllFilesPage() {
 
       <DummyModal open={uploadOpen} title="Upload File" description="Stream file directly to selected Google Drive account." onClose={() => setUploadOpen(false)}>
         <form onSubmit={uploadFile} className="grid gap-4">
-          <label className="grid gap-2 text-sm font-semibold">Choose File<Input type="file" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} required /></label>
+          <label onDragEnter={handleUploadDrag} onDragOver={handleUploadDrag} onDragLeave={handleUploadDrag} onDrop={handleUploadDrag} className={isUploadDragging ? 'grid cursor-pointer gap-3 rounded-2xl border-2 border-dashed border-blue-500 bg-blue-50 p-6 text-center transition' : 'grid cursor-pointer gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 text-center transition hover:border-blue-300 hover:bg-blue-50/50'}>
+            <Upload className={isUploadDragging ? 'mx-auto h-8 w-8 text-blue-600' : 'mx-auto h-8 w-8 text-slate-500'} />
+            <span className="text-sm font-extrabold text-slate-950">Drop file here or click to browse</span>
+            <span className="text-xs text-slate-500">Metadata is sent before the file so upload can stream directly to Google Drive.</span>
+            <Input type="file" className="sr-only" onChange={(event) => selectUploadFile(event.target.files?.[0])} required={!selectedFile} />
+          </label>
           {activeFolder ? <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Uploading to: <b>{activeFolder.name}</b></p> : <label className="grid gap-2 text-sm font-semibold">Virtual Folder<select className="h-11 rounded-xl border border-slate-200 px-3 text-sm" value={selectedFolderId} onChange={(event) => setSelectedFolderId(event.target.value)}><option value="">No folder</option>{allFolders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>}
           {selectedFile ? <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">{selectedFile.name} - {formatBytes(selectedFile.size)}</p> : null}
           <div className="flex justify-end gap-3"><Button type="button" variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button><Button disabled={loading || !selectedFile}>{loading ? 'Uploading...' : 'Upload'}</Button></div>
