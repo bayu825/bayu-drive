@@ -3,6 +3,9 @@ import type { ConnectedAccount, ProviderConfig } from '@prisma/client'
 import { prisma } from '../../config/prisma.js'
 import { decryptText, encryptText } from '../../utils/crypto.js'
 
+const googleDriveFolderMimeType = 'application/vnd.google-apps.folder'
+const appFolderName = '9drive'
+
 export function createOAuthClient(config: ProviderConfig) {
   return new google.auth.OAuth2(decryptText(config.clientIdEncrypted), decryptText(config.clientSecretEncrypted), config.redirectUri)
 }
@@ -60,4 +63,27 @@ export async function syncGoogleQuota(accountId: string) {
       lastSyncedAt: new Date(),
     },
   })
+}
+
+function escapeDriveQueryValue(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
+export async function ensureGoogleAppFolder(account: ConnectedAccount) {
+  const auth = await getAuthedGoogleClient(account)
+  const drive = google.drive({ version: 'v3', auth })
+  const queryName = escapeDriveQueryValue(appFolderName)
+  const existing = await drive.files.list({
+    q: `name = '${queryName}' and mimeType = '${googleDriveFolderMimeType}' and 'root' in parents and trashed = false`,
+    spaces: 'drive',
+    fields: 'files(id,name)',
+    pageSize: 1,
+  })
+  const folderId = existing.data.files?.[0]?.id ?? (await drive.files.create({
+    requestBody: { name: appFolderName, mimeType: googleDriveFolderMimeType, parents: ['root'] },
+    fields: 'id',
+  })).data.id
+
+  if (!folderId) throw new Error('Failed to create Google Drive app folder.')
+  return folderId
 }

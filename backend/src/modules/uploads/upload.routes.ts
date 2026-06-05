@@ -4,7 +4,7 @@ import { google } from 'googleapis'
 import { env } from '../../config/env.js'
 import { prisma } from '../../config/prisma.js'
 import { requireAuth, type AuthRequest } from '../../middleware/auth.middleware.js'
-import { getAuthedGoogleClient, syncGoogleQuota } from '../google/google.service.js'
+import { ensureGoogleAppFolder, getAuthedGoogleClient, syncGoogleQuota } from '../google/google.service.js'
 
 export const uploadRouter = Router()
 uploadRouter.use(requireAuth)
@@ -112,6 +112,7 @@ uploadRouter.post('/', async (req: AuthRequest, res, next) => {
         logUpload('file upload started', { sessionId: session.id, accountId: account.id, fileName, sizeBytes: meta.sizeBytes.toString() })
         const auth = await getAuthedGoogleClient(account)
         const drive = google.drive({ version: 'v3', auth })
+        const appFolderId = await ensureGoogleAppFolder(account)
 
         let streamedBytes = 0n
         fileStream.on('data', (chunk: Buffer) => {
@@ -119,7 +120,7 @@ uploadRouter.post('/', async (req: AuthRequest, res, next) => {
         })
 
         const uploaded = await drive.files.create({
-          requestBody: { name: fileName },
+          requestBody: { name: fileName, parents: [appFolderId] },
           media: { mimeType: meta.mimeType, body: fileStream },
           fields: 'id,name,mimeType,size',
         })
