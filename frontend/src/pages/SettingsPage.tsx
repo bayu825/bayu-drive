@@ -147,7 +147,7 @@ export function SettingsPage() {
                 <div className="flex items-center gap-3"><Cloud className="h-6 w-6 text-blue-600" /><h2 className="text-xl font-extrabold">Google Drive</h2></div>
                 <p className="mt-2 text-sm text-slate-500">Connect one or more Google Drive accounts. 9Drive will route uploads to account with enough space.</p>
               </div>
-              <Button className="w-full sm:w-auto" onClick={connectDrive} disabled={connecting}><Link2 className="h-4 w-4" />{connecting ? 'Opening...' : 'Connect Drive'}</Button>
+              <Button className="w-full sm:w-36" onClick={connectDrive} disabled={connecting}><Link2 className="h-4 w-4" />{connecting ? 'Opening...' : 'Connect Drive'}</Button>
             </div>
           </Card>
 
@@ -157,7 +157,7 @@ export function SettingsPage() {
                 <div className="flex items-center gap-3"><Database className="h-6 w-6 text-blue-600" /><h2 className="text-xl font-extrabold">S3 Compatible</h2></div>
                 <p className="mt-2 text-sm text-slate-500">Connect AWS S3, Cloudflare R2, MinIO, Wasabi, Backblaze B2, or custom endpoint storage.</p>
               </div>
-              <Button className="w-full sm:w-auto" variant="outline" onClick={() => setS3Open(true)}><Database className="h-4 w-4" />Connect S3</Button>
+              <Button className="w-full sm:w-36" variant="outline" onClick={() => setS3Open(true)}><Database className="h-4 w-4" />Connect S3</Button>
             </div>
           </Card>
 

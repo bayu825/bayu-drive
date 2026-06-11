@@ -1,4 +1,5 @@
 import Busboy from 'busboy'
+import type { NextFunction, Response } from 'express'
 import { Router } from 'express'
 import { google } from 'googleapis'
 import { env } from '../../config/env.js'
@@ -8,7 +9,6 @@ import { ensureGoogleAppFolder, getAuthedGoogleClient, syncGoogleQuota } from '.
 import { buildS3ObjectKey, getS3ConfigForAccount, syncS3Quota, uploadS3Object } from '../s3/s3.service.js'
 
 export const uploadRouter = Router()
-uploadRouter.use(requireAuth)
 
 type UploadMeta = { fieldName: string; fileName: string; mimeType: string; sizeBytes: bigint; folderId?: string }
 type RoutingMode = 'most_available' | 'round_robin' | 'priority'
@@ -85,7 +85,7 @@ async function selectAccount(userId: string, sizeBytes: bigint, reservedBytesByA
     })[0]?.account
 }
 
-uploadRouter.post('/', async (req: AuthRequest, res, next) => {
+export async function handleUpload(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     logUpload('request started', { userId: req.user!.id, contentLength: req.headers['content-length'] })
     const contentType = req.headers['content-type']
@@ -247,4 +247,6 @@ uploadRouter.post('/', async (req: AuthRequest, res, next) => {
   } catch (error) {
     return next(error)
   }
-})
+}
+
+uploadRouter.post('/', requireAuth, handleUpload)
