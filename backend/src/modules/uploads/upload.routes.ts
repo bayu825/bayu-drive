@@ -1,4 +1,5 @@
 import Busboy from 'busboy'
+import { PassThrough } from 'stream'
 import type { NextFunction, Response } from 'express'
 import { Router } from 'express'
 import { google } from 'googleapis'
@@ -177,9 +178,11 @@ export async function handleUpload(req: AuthRequest, res: Response, next: NextFu
           const auth = await getAuthedGoogleClient(account)
           const drive = google.drive({ version: 'v3', auth })
           const appFolderId = await ensureGoogleAppFolder(account)
+          const passThrough = new PassThrough()
+          fileStream.pipe(passThrough)
           const uploaded = await drive.files.create({
             requestBody: { name: fileName, parents: [appFolderId] },
-            media: { mimeType: meta.mimeType, body: fileStream },
+            media: { mimeType: meta.mimeType, body: passThrough },
             fields: 'id,name,mimeType,size',
           })
           providerFileId = uploaded.data.id ?? ''
