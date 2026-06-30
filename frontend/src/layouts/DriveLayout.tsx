@@ -109,7 +109,7 @@ function Sidebar({ onNavigate, user, storage, breakdown, onLogout }: { onNavigat
     <aside className="flex h-full w-72 flex-col border-slate-200 bg-white p-5 lg:border-r">
       <div className="flex items-center gap-3 pb-5">
         <BrandLogo />
-        <span className="text-2xl font-extrabold tracking-tight">9Drive</span>
+        <span className="text-2xl font-extrabold tracking-tight">Cloud Kalisanen</span>
       </div>
 
       <div className="flex items-center gap-3 border-y border-slate-200 py-5">
@@ -275,7 +275,7 @@ export function DriveLayout() {
                 </Button>
                 <div className="flex min-w-0 items-center gap-2">
                   <BrandLogo className="h-9 w-9 shrink-0" />
-                  <span className="truncate text-xl font-extrabold tracking-tight">9Drive</span>
+                  <span className="truncate text-xl font-extrabold tracking-tight">Cloud Kalisanen</span>
                 </div>
               </div>
               <div className="relative shrink-0">
