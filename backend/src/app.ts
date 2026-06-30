@@ -16,7 +16,12 @@ import { publicApiRouter } from './modules/public-api/public-api.routes.js'
 
 export const app = express()
 
-app.use(cors({ origin: env.FRONTEND_URL }))
+app.use(cors({
+  origin: env.FRONTEND_URL,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}))
 app.use(express.json({ limit: '1mb' }))
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
