@@ -1,7 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Bell,
   Braces,
   FileArchive,
   Gauge,
@@ -19,7 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { BrandLogo } from '@/components/drive/BrandLogo'
 import { Input } from '@/components/ui/input'
-import { apiFetch, formatBytes, formatDate } from '@/lib/api'
+import { apiFetch, formatBytes } from '@/lib/api'
 import { clearAuthSession, getStoredUser, updateStoredUser, type AuthUser } from '@/lib/auth'
 import { getGravatarUrl } from '@/lib/gravatar'
 import { cn } from '@/lib/utils'
@@ -43,51 +42,6 @@ type StorageBreakdown = {
   document: string
 }
 
-type RepoUpdate = {
-  sha: string
-  title: string
-  author: string
-  date: string
-  url: string
-}
-
-type GitHubCommit = {
-  sha: string
-  html_url: string
-  commit: {
-    message: string
-    author?: {
-      name?: string
-      date?: string
-    }
-  }
-}
-
-function RepoUpdatesDropdown({ updates, loading, error }: { updates: RepoUpdate[]; loading: boolean; error: string }) {
-  return (
-    <div className="absolute right-0 top-12 z-50 w-[min(calc(100vw-2rem),24rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/15">
-      <div className="border-b border-slate-200 px-4 py-3">
-        <p className="text-sm font-extrabold text-slate-950">Repository Updates</p>
-        <p className="text-xs text-slate-500">Latest commits from zenhosta/9drive</p>
-      </div>
-      <div className="max-h-96 overflow-y-auto p-2">
-        {loading ? <p className="p-4 text-sm text-slate-500">Loading updates...</p> : null}
-        {error ? <p className="p-4 text-sm text-red-600">{error}</p> : null}
-        {!loading && !error && updates.length === 0 ? <p className="p-4 text-sm text-slate-500">No updates found.</p> : null}
-        {!loading && !error ? updates.map((update) => (
-          <a key={update.sha} href={update.url} target="_blank" rel="noreferrer" className="block rounded-xl p-3 transition hover:bg-slate-50">
-            <div className="flex items-start justify-between gap-3">
-              <p className="line-clamp-2 min-w-0 text-sm font-bold leading-snug text-slate-950">{update.title}</p>
-              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">{update.sha}</span>
-            </div>
-            <p className="mt-1 truncate text-xs text-slate-500">{update.author} • {update.date}</p>
-          </a>
-        )) : null}
-      </div>
-      <a href="https://github.com/zenhosta/9drive" target="_blank" rel="noreferrer" className="block border-t border-slate-200 px-4 py-3 text-sm font-bold text-blue-600 hover:bg-blue-50">View repository</a>
-    </div>
-  )
-}
 
 function Sidebar({ onNavigate, user, storage, breakdown, onLogout }: { onNavigate?: () => void; user: AuthUser | null; storage: StorageSummary | null; breakdown: StorageBreakdown; onLogout: () => void }) {
   const used = Number(storage?.usedBytes ?? 0)
@@ -170,11 +124,7 @@ export function DriveLayout() {
   const [user, setUser] = useState<AuthUser | null>(getStoredUser())
   const [storage, setStorage] = useState<StorageSummary | null>(null)
   const [breakdown, setBreakdown] = useState<StorageBreakdown>({ photo: '0', video: '0', document: '0' })
-  const [updatesOpen, setUpdatesOpen] = useState(false)
-  const [updates, setUpdates] = useState<RepoUpdate[]>([])
-  const [updatesLoading, setUpdatesLoading] = useState(false)
-  const [updatesError, setUpdatesError] = useState('')
-  const [updatesLoaded, setUpdatesLoaded] = useState(false)
+
 
   async function loadSidebarStats() {
     await Promise.all([
@@ -202,35 +152,6 @@ export function DriveLayout() {
     navigate({ pathname: '/all-files', search: nextParams.toString() })
   }
 
-  async function loadRepoUpdates() {
-    setUpdatesLoading(true)
-    setUpdatesError('')
-    try {
-      const response = await fetch('https://api.github.com/repos/zenhosta/9drive/commits?per_page=5', {
-        headers: { Accept: 'application/vnd.github+json' },
-      })
-      if (!response.ok) throw new Error(response.status === 403 ? 'GitHub rate limit reached. Try again later.' : 'Failed to load repository updates.')
-      const commits = await response.json() as GitHubCommit[]
-      setUpdates(commits.map((item) => ({
-        sha: item.sha.slice(0, 7),
-        title: item.commit.message.split('\n')[0] || 'Repository update',
-        author: item.commit.author?.name ?? 'GitHub',
-        date: item.commit.author?.date ? formatDate(item.commit.author.date) : '--',
-        url: item.html_url,
-      })))
-      setUpdatesLoaded(true)
-    } catch (error) {
-      setUpdatesError(error instanceof Error ? error.message : 'Failed to load repository updates.')
-    } finally {
-      setUpdatesLoading(false)
-    }
-  }
-
-  function toggleRepoUpdates() {
-    setUpdatesOpen((open) => !open)
-    if (!updatesLoaded && !updatesLoading) loadRepoUpdates().catch(() => undefined)
-  }
-
   useEffect(() => {
     apiFetch<{ user: AuthUser }>('/auth/me')
       .then((data) => {
@@ -241,14 +162,6 @@ export function DriveLayout() {
     loadSidebarStats().catch(() => undefined)
     window.addEventListener('9drive:storage-changed', loadSidebarStats)
     return () => window.removeEventListener('9drive:storage-changed', loadSidebarStats)
-  }, [])
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setUpdatesOpen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   return (
@@ -278,26 +191,12 @@ export function DriveLayout() {
                   <span className="truncate text-xl font-extrabold tracking-tight">Cloud Kalisanen</span>
                 </div>
               </div>
-              <div className="relative shrink-0">
-                <Button variant="outline" size="icon" className="relative" aria-label="Repository updates" aria-expanded={updatesOpen} onClick={toggleRepoUpdates}>
-                  <Bell className="h-5 w-5" />
-                  {!updatesOpen ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-600" /> : null}
-                </Button>
-                {updatesOpen ? <RepoUpdatesDropdown updates={updates} loading={updatesLoading} error={updatesError} /> : null}
-              </div>
             </div>
             <form onSubmit={searchFiles} className="relative w-full min-w-0 flex-1 xl:max-w-xl">
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
               <Input value={searchValue} onChange={(event) => setSearchValue(event.target.value)} placeholder="Search Documents" className="pl-11 pr-12" />
               <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500" aria-label="Search files"><SlidersHorizontal className="h-5 w-5" /></button>
             </form>
-            <div className="relative hidden flex-wrap gap-3 lg:flex">
-              <Button variant="outline" size="icon" className="relative" aria-label="Repository updates" aria-expanded={updatesOpen} onClick={toggleRepoUpdates}>
-                <Bell className="h-5 w-5" />
-                {!updatesOpen ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-600" /> : null}
-              </Button>
-              {updatesOpen ? <RepoUpdatesDropdown updates={updates} loading={updatesLoading} error={updatesError} /> : null}
-            </div>
           </header>
           <Outlet />
         </section>
