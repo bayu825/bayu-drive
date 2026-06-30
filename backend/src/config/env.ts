@@ -7,7 +7,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   PORT: z.coerce.number().optional(),
   APP_PORT: z.coerce.number().default(4000),
-  FRONTEND_URL: z.string().url(),
+  FRONTEND_URL: z.string().min(1),
   JWT_ACCESS_SECRET: z.string().min(32),
   TOKEN_ENCRYPTION_KEY: z.string().min(32),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().default(900),
@@ -17,3 +17,6 @@ const envSchema = z.object({
 })
 
 export const env = envSchema.parse(process.env)
+
+// Use only the first URL for generating share/redirect links
+export const primaryFrontendUrl = env.FRONTEND_URL.split(',')[0].trim()

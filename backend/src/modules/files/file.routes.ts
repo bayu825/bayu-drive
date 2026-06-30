@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { google } from 'googleapis'
 import { z } from 'zod'
 import { prisma } from '../../config/prisma.js'
-import { env } from '../../config/env.js'
+import { env, primaryFrontendUrl } from '../../config/env.js'
 import { requireAuth, type AuthRequest } from '../../middleware/auth.middleware.js'
 import { hashToken, randomToken } from '../../utils/crypto.js'
 import { getAuthedGoogleClient, syncGoogleAppFolderFiles, syncGoogleQuota } from '../google/google.service.js'
@@ -96,7 +96,7 @@ fileRouter.get('/shared-links', async (req: AuthRequest, res, next) => {
     return res.json({
       shares: shares.filter((share) => share.file.status === 'active').map((share) => ({
         id: share.id,
-        url: share.token ? `${env.FRONTEND_URL}/public/files/${share.token}` : null,
+        url: share.token ? `${primaryFrontendUrl}/public/files/${share.token}` : null,
         createdAt: share.createdAt.toISOString(),
         expiresAt: share.expiresAt?.toISOString() ?? null,
         file: { ...share.file, sizeBytes: share.file.sizeBytes.toString() },
@@ -161,11 +161,11 @@ fileRouter.post('/:id/share', async (req: AuthRequest, res, next) => {
     const fileId = String(req.params.id)
     const file = await prisma.file.findFirstOrThrow({ where: { id: fileId, userId: req.user!.id, status: 'active' } })
     const existingShare = await prisma.fileShare.findFirst({ where: { fileId: file.id, userId: req.user!.id, enabled: true, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, orderBy: { createdAt: 'desc' } })
-    if (existingShare?.token) return res.json({ url: `${env.FRONTEND_URL}/public/files/${existingShare.token}`, shareId: existingShare.id })
+    if (existingShare?.token) return res.json({ url: `${primaryFrontendUrl}/public/files/${existingShare.token}`, shareId: existingShare.id })
     if (existingShare) await prisma.fileShare.update({ where: { id: existingShare.id }, data: { enabled: false } })
     const token = randomToken(32)
     const share = await prisma.fileShare.create({ data: { fileId: file.id, userId: req.user!.id, token, tokenHash: hashToken(token) } })
-    return res.status(201).json({ url: `${env.FRONTEND_URL}/public/files/${token}`, shareId: share.id })
+    return res.status(201).json({ url: `${primaryFrontendUrl}/public/files/${token}`, shareId: share.id })
   } catch (error) {
     return next(error)
   }
