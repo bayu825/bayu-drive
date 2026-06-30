@@ -1,8 +1,45 @@
 import { MoreVertical } from 'lucide-react'
 import type { MouseEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { FileIcon } from '@/components/drive/FileIcon'
+import { API_URL, apiFetch } from '@/lib/api'
 import type { FileItem } from '@/data/drive-data'
+
+function ImageThumbnail({ file }: { file: FileItem }) {
+  const [src, setSrc] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    if (file.kind !== 'image' || !file.id) return
+    let cancelled = false
+    apiFetch<{ path?: string; url: string }>(`/files/${file.id}/preview-token`, { method: 'POST' })
+      .then((data) => {
+        if (cancelled) return
+        const previewPath = data.path ?? new URL(data.url).pathname
+        setSrc(`${API_URL}${previewPath}`)
+      })
+      .catch(() => { if (!cancelled) setFailed(true) })
+    return () => { cancelled = true }
+  }, [file.id, file.kind])
+
+  if (file.kind !== 'image' || failed) {
+    return <FileIcon kind={file.kind} className="h-9 w-9 rounded-xl p-2 sm:h-11 sm:w-11" />
+  }
+
+  if (!src) {
+    return <div className="h-9 w-9 animate-pulse rounded-xl bg-slate-200 sm:h-11 sm:w-11" />
+  }
+
+  return (
+    <img
+      src={src}
+      alt={file.name}
+      className="h-16 w-16 rounded-xl object-cover sm:h-20 sm:w-20"
+      onError={() => setFailed(true)}
+    />
+  )
+}
 
 export function FileGrid({ files, selectedFileIds = new Set<string>(), onFileContextMenu, onToggleFile }: { files: FileItem[]; selectedFileIds?: Set<string>; onFileContextMenu?: (event: MouseEvent<HTMLElement>, file: FileItem) => void; onToggleFile?: (file: FileItem) => void }) {
   return (
@@ -17,8 +54,8 @@ export function FileGrid({ files, selectedFileIds = new Set<string>(), onFileCon
             </div>
 
             <div className="mt-5 flex justify-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 sm:h-20 sm:w-20">
-                <FileIcon kind={file.kind} className="h-9 w-9 rounded-xl p-2 sm:h-11 sm:w-11" />
+              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 text-slate-700 sm:h-20 sm:w-20">
+                <ImageThumbnail file={file} />
               </div>
             </div>
 
@@ -36,3 +73,4 @@ export function FileGrid({ files, selectedFileIds = new Set<string>(), onFileCon
     </div>
   )
 }
+
