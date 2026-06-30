@@ -16,8 +16,12 @@ import { publicApiRouter } from './modules/public-api/public-api.routes.js'
 
 export const app = express()
 
+const allowedOrigins = env.FRONTEND_URL.split(',').map((o) => o.trim()).filter(Boolean)
 app.use(cors({
-  origin: env.FRONTEND_URL,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true)
+    callback(new Error(`CORS: origin not allowed: ${origin}`))
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
