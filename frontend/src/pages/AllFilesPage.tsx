@@ -129,6 +129,7 @@ export function AllFilesPage() {
   const [inviteMessage, setInviteMessage] = useState('')
   const [inviting, setInviting] = useState(false)
   const previewVideoRef = useRef<HTMLVideoElement | null>(null)
+  const previewBlobUrlRef = useRef<string | null>(null)
 
   async function loadFiles() {
     const params = new URLSearchParams()
@@ -358,7 +359,18 @@ export function AllFilesPage() {
     try {
       const data = await apiFetch<{ path?: string; url: string }>(`/files/${activeFile.id}/preview-token`, { method: 'POST' })
       const previewPath = data.path ?? new URL(data.url).pathname
-      setPreviewUrl(`${API_URL}${previewPath}`)
+      const streamUrl = `${API_URL}${previewPath}`
+      if (activeFile.mimeType?.startsWith('image/')) {
+        const response = await fetch(streamUrl)
+        if (!response.ok) throw new Error('Failed to load preview')
+        const blob = await response.blob()
+        if (previewBlobUrlRef.current) URL.revokeObjectURL(previewBlobUrlRef.current)
+        const blobUrl = URL.createObjectURL(blob)
+        previewBlobUrlRef.current = blobUrl
+        setPreviewUrl(blobUrl)
+      } else {
+        setPreviewUrl(streamUrl)
+      }
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : 'Failed to load preview')
     } finally {
@@ -491,6 +503,10 @@ export function AllFilesPage() {
   }
 
   function closePreview() {
+    if (previewBlobUrlRef.current) {
+      URL.revokeObjectURL(previewBlobUrlRef.current)
+      previewBlobUrlRef.current = null
+    }
     setPreviewUrl('')
     setPreviewError('')
     setPreviewLoading(false)
