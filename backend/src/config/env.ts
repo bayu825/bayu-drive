@@ -5,6 +5,7 @@ dotenv.config()
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
+  PORT: z.coerce.number().optional(),
   APP_PORT: z.coerce.number().default(4000),
   FRONTEND_URL: z.string().url(),
   JWT_ACCESS_SECRET: z.string().min(32),
