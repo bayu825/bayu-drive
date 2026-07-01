@@ -360,14 +360,25 @@ export function AllFilesPage() {
       const data = await apiFetch<{ path?: string; url: string }>(`/files/${activeFile.id}/preview-token`, { method: 'POST' })
       const previewPath = data.path ?? new URL(data.url).pathname
       const streamUrl = `${API_URL}${previewPath}`
-      // Always fetch as blob to avoid CORS and auth issues with direct <img>/<video> src
-      const response = await fetch(streamUrl)
-      if (!response.ok) throw new Error('Failed to load preview')
-      const blob = await response.blob()
-      if (previewBlobUrlRef.current) URL.revokeObjectURL(previewBlobUrlRef.current)
-      const blobUrl = URL.createObjectURL(blob)
-      previewBlobUrlRef.current = blobUrl
-      setPreviewUrl(blobUrl)
+      if (activeFile.mimeType?.startsWith('video/')) {
+        // For video: use direct public URL so browser can stream with range requests natively (seek/skip support).
+        // The /files/preview/:token endpoint is public — no auth header needed.
+        // CORS is allowed since FRONTEND_URL is now set to the correct domain.
+        if (previewBlobUrlRef.current) {
+          URL.revokeObjectURL(previewBlobUrlRef.current)
+          previewBlobUrlRef.current = null
+        }
+        setPreviewUrl(streamUrl)
+      } else {
+        // For images/docs: download as blob (small files, avoids any residual CORS issues)
+        const response = await fetch(streamUrl)
+        if (!response.ok) throw new Error('Failed to load preview')
+        const blob = await response.blob()
+        if (previewBlobUrlRef.current) URL.revokeObjectURL(previewBlobUrlRef.current)
+        const blobUrl = URL.createObjectURL(blob)
+        previewBlobUrlRef.current = blobUrl
+        setPreviewUrl(blobUrl)
+      }
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : 'Failed to load preview')
     } finally {
