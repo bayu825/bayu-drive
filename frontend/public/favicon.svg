@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Dark blue circle background -->
+  <circle cx="50" cy="50" r="50" fill="#1a3a6b"/>
+
+  <!-- Cloud shape (white) -->
+  <path fill="#ffffff" d="
+    M68 47
+    a14 14 0 0 0-14-14
+    a14 14 0 0 0-12.5 7.7
+    A10 10 0 0 0 32 51
+    a10 10 0 0 0 10 10
+    h26
+    a10 10 0 0 0 10-10
+    a10 10 0 0 0-10-4
+  "/>
+
+  <!-- Upload arrow (light blue) -->
+  <g fill="#4fc3f7" stroke="#4fc3f7" stroke-width="1">
+    <!-- Arrow shaft -->
+    <rect x="47" y="50" width="6" height="14" rx="2"/>
+    <!-- Arrow head -->
+    <polygon points="50,36 42,52 58,52"/>
+  </g>
+</svg>
