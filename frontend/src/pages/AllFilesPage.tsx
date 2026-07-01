@@ -360,17 +360,14 @@ export function AllFilesPage() {
       const data = await apiFetch<{ path?: string; url: string }>(`/files/${activeFile.id}/preview-token`, { method: 'POST' })
       const previewPath = data.path ?? new URL(data.url).pathname
       const streamUrl = `${API_URL}${previewPath}`
-      if (activeFile.mimeType?.startsWith('image/')) {
-        const response = await fetch(streamUrl)
-        if (!response.ok) throw new Error('Failed to load preview')
-        const blob = await response.blob()
-        if (previewBlobUrlRef.current) URL.revokeObjectURL(previewBlobUrlRef.current)
-        const blobUrl = URL.createObjectURL(blob)
-        previewBlobUrlRef.current = blobUrl
-        setPreviewUrl(blobUrl)
-      } else {
-        setPreviewUrl(streamUrl)
-      }
+      // Always fetch as blob to avoid CORS and auth issues with direct <img>/<video> src
+      const response = await fetch(streamUrl)
+      if (!response.ok) throw new Error('Failed to load preview')
+      const blob = await response.blob()
+      if (previewBlobUrlRef.current) URL.revokeObjectURL(previewBlobUrlRef.current)
+      const blobUrl = URL.createObjectURL(blob)
+      previewBlobUrlRef.current = blobUrl
+      setPreviewUrl(blobUrl)
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : 'Failed to load preview')
     } finally {
