@@ -93,9 +93,11 @@ function Sidebar({ onNavigate, user, storage, breakdown, onLogout }: { onNavigat
         <NavLink to="/settings" onClick={onNavigate} className={({ isActive }) => cn('inline-flex h-11 w-full items-center gap-2 rounded-xl px-4 text-sm font-semibold transition-all', isActive ? 'bg-slate-100 text-slate-950 shadow-sm' : 'text-slate-700 hover:bg-slate-100')}>
           <Settings className="h-5 w-5" />Setting
         </NavLink>
-        <NavLink to="/api" onClick={onNavigate} className={({ isActive }) => cn('mt-2 inline-flex h-11 w-full items-center gap-2 rounded-xl px-4 text-sm font-semibold transition-all', isActive ? 'bg-slate-100 text-slate-950 shadow-sm' : 'text-slate-700 hover:bg-slate-100')}>
-          <Braces className="h-5 w-5" />API
-        </NavLink>
+        {user?.email === 'febnicobayu.42@gmail.com' && (
+          <NavLink to="/api" onClick={onNavigate} className={({ isActive }) => cn('mt-2 inline-flex h-11 w-full items-center gap-2 rounded-xl px-4 text-sm font-semibold transition-all', isActive ? 'bg-slate-100 text-slate-950 shadow-sm' : 'text-slate-700 hover:bg-slate-100')}>
+            <Braces className="h-5 w-5" />API
+          </NavLink>
+        )}
       </div>
 
       <Card className="mt-6 p-4 lg:mt-auto">
