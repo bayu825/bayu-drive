@@ -9,7 +9,7 @@ export function FolderGrid({ items, mobileTwoColumns = false, onFolderMenu, onFo
   return (
     <div className={cn('mt-6 grid gap-3 sm:mt-8 sm:grid-cols-2 sm:gap-5 xl:grid-cols-4', mobileTwoColumns && 'grid-cols-2')}>
       {items.map((folder) => (
-        <Card key={folder.name} onDoubleClick={() => onFolderOpen?.(folder)} onContextMenu={(event) => onFolderMenu?.(event, folder)} className="group relative flex min-h-36 cursor-pointer flex-col items-center justify-center p-4 transition hover:-translate-y-1 hover:shadow-xl sm:min-h-48 sm:p-6">
+        <Card key={folder.name} onClick={() => { if (window.matchMedia('(max-width: 768px)').matches) onFolderOpen?.(folder) }} onDoubleClick={() => onFolderOpen?.(folder)} onContextMenu={(event) => onFolderMenu?.(event, folder)} className="group relative flex min-h-36 cursor-pointer flex-col items-center justify-center p-4 transition hover:-translate-y-1 hover:shadow-xl sm:min-h-48 sm:p-6">
           <button className="absolute right-2 top-2 flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 sm:right-4 sm:top-4 sm:h-8 sm:w-8 sm:rounded-lg" onClick={(event) => { event.stopPropagation(); onFolderMenu?.(event, folder) }} aria-label={`Open ${folder.name} menu`}><MoreVertical className="h-5 w-5" /></button>
           <FolderVisual folder={folder} className="h-14 w-14 transition group-hover:scale-110 sm:h-20 sm:w-20" />
           <h2 className="mt-3 line-clamp-2 text-center text-sm font-extrabold sm:mt-5 sm:text-lg">{folder.name}</h2>
