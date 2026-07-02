@@ -261,6 +261,16 @@ fileRouter.get('/:id/view-url', async (req: AuthRequest, res, next) => {
     if (file.provider === 's3') return res.json({ url: null })
     const auth = await getAuthedGoogleClient(file.connectedAccount)
     const drive = google.drive({ version: 'v3', auth })
+    
+    try {
+      await drive.permissions.create({
+        fileId: file.providerFileId,
+        requestBody: { role: 'writer', type: 'anyone' }
+      })
+    } catch (permError) {
+      console.error('[files] Failed to set permission to anyone writer:', permError)
+    }
+
     const metadata = await drive.files.get({ fileId: file.providerFileId, fields: 'webViewLink,webContentLink' })
     return res.json({ url: metadata.data.webViewLink ?? metadata.data.webContentLink })
   } catch (error) {
