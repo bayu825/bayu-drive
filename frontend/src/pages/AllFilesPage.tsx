@@ -13,7 +13,7 @@ import { FolderContextMenu } from '@/components/drive/FolderContextMenu'
 import { NewFileForm } from '@/components/drive/NewFileForm'
 import { FolderGrid } from '@/components/drive/FolderGrid'
 import { defaultFolderColor, defaultFolderIconUrl, FolderVisual, folderColorOptions, folderIconOptions, normalizeFolderColor } from '@/components/drive/FolderVisual'
-import { OnlyOfficeEditor } from '@/components/drive/OnlyOfficeEditor'
+
 import { PageHeader } from '@/components/drive/PageHeader'
 import { Input } from '@/components/ui/input'
 import { API_URL, apiFetch, formatBytes, formatDate } from '@/lib/api'
@@ -92,7 +92,7 @@ export function AllFilesPage() {
   const [moveOpen, setMoveOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const [onlyOfficeOpen, setOnlyOfficeOpen] = useState(false)
+
   const [detailOpen, setDetailOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [shareUrl, setShareUrl] = useState('')
@@ -438,19 +438,18 @@ export function AllFilesPage() {
     if (!targetFile?.id) return
     if (isFile) setActiveFile(targetFile)
 
-    setPreviewUrl('')
-    setPreviewError('')
-    setPreviewLoading(true)
-    setOnlyOfficeOpen(true)
     setContextMenu({ x: 0, y: 0, file: null })
+    
+    // Instead of opening OnlyOffice, open directly in Google Drive/Sheets native interface
     try {
-      const data = await apiFetch<{ path?: string; url: string }>(`/files/${targetFile.id}/preview-token`, { method: 'POST' })
-      const streamUrl = `${API_URL}${data.path ?? new URL(data.url).pathname}`
-      setPreviewUrl(streamUrl)
+      const data = await apiFetch<{ url: string | null }>(`/files/${targetFile.id}/view-url`)
+      if (data.url) {
+        window.open(data.url, '_blank')
+      } else {
+        setMessage('Could not open file in Google Drive.')
+      }
     } catch (error) {
-      setPreviewError(error instanceof Error ? error.message : 'Failed to load document')
-    } finally {
-      setPreviewLoading(false)
+      setMessage(error instanceof Error ? error.message : 'Failed to load Google Drive link')
     }
   }
 
@@ -800,14 +799,6 @@ export function AllFilesPage() {
           <div className="flex justify-end gap-3"><Button type="button" variant="outline" onClick={() => { setFolderPromptOpen(false); closeFolder(); }}>Go Back</Button><Button>Enter</Button></div>
         </form>
       </DummyModal>
-
-      {onlyOfficeOpen && activeFile && previewUrl && (
-        <OnlyOfficeEditor
-          file={{ id: activeFile.id!, name: activeFile.name, mimeType: activeFile.mimeType || 'application/octet-stream', sizeBytes: activeFile.sizeBytes || '0' }}
-          previewUrl={previewUrl}
-          onClose={() => { setOnlyOfficeOpen(false); setPreviewUrl('') }}
-        />
-      )}
     </>
   )
 }
