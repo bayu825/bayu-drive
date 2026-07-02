@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input'
 import { API_URL, apiFetch, formatBytes, formatDate } from '@/lib/api'
 import { getAccessToken } from '@/lib/auth'
 import { createPlyr, ensurePlyr } from '@/lib/plyr'
-import { getPreviewKind, officeViewerUrl } from '@/lib/preview'
+import { getPreviewKind, officeViewerUrl, documentViewerUrl } from '@/lib/preview'
 import type { FileItem, FolderItem } from '@/data/drive-data'
 
 type BackendFile = { id: string; name: string; mimeType: string; sizeBytes: string; createdAt: string; folderId?: string | null; connectedAccount?: { email: string; provider: string }; folder?: { id: string; name: string } | null }
@@ -406,8 +406,9 @@ export function AllFilesPage() {
       const data = await apiFetch<{ path?: string; url: string }>(`/files/${targetFile.id}/preview-token`, { method: 'POST' })
       const previewPath = data.path ?? new URL(data.url).pathname
       const streamUrl = `${API_URL}${previewPath}`
-      if (targetFile.mimeType?.startsWith('video/')) {
-        // For video: use direct public URL so browser can stream with range requests natively (seek/skip support).
+      const previewKind = getPreviewKind(targetFile.mimeType, targetFile.name)
+      if (targetFile.mimeType?.startsWith('video/') || previewKind === 'document' || previewKind === 'office') {
+        // For video/docs/office: use direct public URL so browser/external viewers can stream it
         // The /files/preview/:token endpoint is public — no auth header needed.
         // CORS is allowed since FRONTEND_URL is now set to the correct domain.
         if (previewBlobUrlRef.current) {
@@ -751,7 +752,7 @@ export function AllFilesPage() {
           {previewError ? <div className="p-6 text-center text-sm text-red-600">{previewError}</div> : null}
           {!previewLoading && !previewError && activePreviewKind === 'image' && previewUrl ? <img src={previewUrl} alt={activeFile?.name ?? 'File preview'} className="max-h-full max-w-full object-contain" onError={() => setPreviewError('Failed to load preview.')} /> : null}
           {!previewLoading && !previewError && activePreviewKind === 'video' && previewUrl ? <div className="shared-video-shell"><video ref={previewVideoRef} controls playsInline preload="metadata" onError={() => setPreviewError('Failed to load preview.')}><source src={previewUrl} type={activeFile?.mimeType} /></video></div> : null}
-          {!previewLoading && !previewError && activePreviewKind === 'document' && previewUrl ? <iframe src={previewUrl} title={activeFile?.name ?? 'File preview'} className="h-full w-full border-0 bg-white" /> : null}
+          {!previewLoading && !previewError && activePreviewKind === 'document' && previewUrl ? <iframe src={documentViewerUrl(previewUrl)} title={activeFile?.name ?? 'File preview'} className="h-full w-full border-0 bg-white" /> : null}
           {!previewLoading && !previewError && activePreviewKind === 'office' && previewUrl ? <iframe src={officeViewerUrl(previewUrl)} title={activeFile?.name ?? 'File preview'} className="h-full w-full border-0 bg-white" /> : null}
           {!previewLoading && !previewError && !activePreviewKind ? <div className="p-6 text-center text-sm text-slate-500">Preview not available for this file type. Use Download instead.</div> : null}
         </div>

@@ -39,3 +39,11 @@ export function officeViewerUrl(fileUrl: string) {
 export function isSpreadsheetMimeType(mimeType: string | undefined) {
   return mimeType === 'application/vnd.google-apps.spreadsheet' || mimeType === 'application/vnd.ms-excel' || mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 }
+
+export function documentViewerUrl(fileUrl: string) {
+  const isMobile = window.matchMedia('(max-width: 768px)').matches || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  if (isMobile) {
+    return `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`
+  }
+  return fileUrl
+}
