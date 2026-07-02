@@ -275,23 +275,7 @@ fileRouter.get('/:id/view-url', async (req: AuthRequest, res, next) => {
       viewUrl = `https://drive.google.com/file/d/${pid}/view`
     }
 
-    // BLOCKING: set permission so anyone can edit/view the file.
-    // If this fails (expired token), log a helpful message and still return the URL.
-    // The file may still open if the user is logged in as the Drive account owner.
-    try {
-      const auth = await getAuthedGoogleClient(file.connectedAccount)
-      const drive = google.drive({ version: 'v3', auth })
-      await drive.permissions.create({
-        fileId: pid,
-        requestBody: { role: 'writer', type: 'anyone' },
-      })
-    } catch (permError: any) {
-      // Ignore 'already exists' (403 with cannotShareTeamDriveTopFolderWithAnyonePermission or duplicate)
-      const isAlreadyShared = permError?.code === 403 || String(permError?.message).includes('already')
-      if (!isAlreadyShared) {
-        console.error('[files/view-url] set permission failed — reconnect Google Drive account to fix:', permError?.message)
-      }
-    }
+
 
     return res.json({ url: viewUrl })
   } catch (error) {

@@ -197,13 +197,6 @@ export async function handleUpload(req: AuthRequest, res: Response, next: NextFu
           uploadedName = uploaded.data.name ?? fileName
           uploadedMimeType = uploaded.data.mimeType ?? meta.mimeType
           logUpload('google upload completed', { sessionId: session.id, accountId: account.id, fileName })
-          // Set anyone/writer so file can be opened from Google Sheets/Docs by any Google account.
-          if (providerFileId) {
-            drive.permissions.create({
-              fileId: providerFileId,
-              requestBody: { role: 'writer', type: 'anyone' },
-            }).catch((permErr) => logUpload('set permission failed (non-fatal)', { fileName, message: permErr?.message }))
-          }
         }
 
         if (streamedBytes !== meta.sizeBytes) {
