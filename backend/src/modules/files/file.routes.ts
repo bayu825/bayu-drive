@@ -8,6 +8,7 @@ import { hashToken, randomToken } from '../../utils/crypto.js'
 import { getAuthedGoogleClient, syncGoogleAppFolderFiles, syncGoogleQuota } from '../google/google.service.js'
 import { deleteS3Object, syncS3Quota } from '../s3/s3.service.js'
 import { streamProviderFile } from './stream-file.js'
+import { verifyFolderAccess } from '../folders/folder.routes.js'
 
 export const fileRouter = Router()
 
@@ -25,11 +26,70 @@ fileRouter.get('/preview/:token', async (req, res, next) => {
   }
 })
 
+fileRouter.post('/onlyoffice-callback/:token', async (req, res, next) => {
+  try {
+    const token = String(req.params.token)
+    const preview = await prisma.filePreviewToken.findFirst({
+      where: { tokenHash: hashToken(token) },
+      include: { file: { include: { connectedAccount: true } } },
+    })
+
+    if (!preview) {
+      return res.json({ error: 1, message: 'Invalid token' })
+    }
+
+    const { status, url } = req.body
+    console.log('OnlyOffice callback received:', req.body)
+
+    if ((status === 2 || status === 6) && url) {
+      const downloadUrl = url.replace('localhost:8080', 'onlyoffice:80')
+      const downloadRes = await fetch(downloadUrl)
+      if (!downloadRes.ok) throw new Error('Failed to download from OnlyOffice')
+      
+      const fileStream = downloadRes.body
+      if (!fileStream) throw new Error('No body')
+
+      const auth = await getAuthedGoogleClient(preview.file.connectedAccount)
+      const drive = google.drive({ version: 'v3', auth })
+
+      const { Readable } = await import('stream')
+      const nodeStream = Readable.fromWeb(fileStream as any)
+
+      await drive.files.update({
+        fileId: preview.file.providerFileId,
+        media: {
+          mimeType: preview.file.mimeType,
+          body: nodeStream
+        }
+      })
+      
+      const gFile = await drive.files.get({ fileId: preview.file.providerFileId, fields: 'size' })
+      if (gFile.data.size) {
+        await prisma.file.update({
+          where: { id: preview.file.id },
+          data: { sizeBytes: BigInt(gFile.data.size) }
+        })
+      }
+    }
+    
+    return res.json({ error: 0 })
+  } catch (error) {
+    console.error('OnlyOffice callback error:', error)
+    return res.json({ error: 1 })
+  }
+})
+
 fileRouter.use(requireAuth)
 
 fileRouter.get('/', async (req: AuthRequest, res, next) => {
   try {
     const query = z.object({ folderId: z.string().optional(), q: z.string().trim().max(255).optional() }).parse(req.query)
+    
+    if (query.folderId) {
+      const hasAccess = await verifyFolderAccess(query.folderId, req.user!.id, req.headers)
+      if (!hasAccess) return res.status(403).json({ code: 'FOLDER_LOCKED', message: 'Folder is locked.' })
+    }
+
     const files = await prisma.file.findMany({ where: { userId: req.user!.id, status: 'active', ...(query.folderId ? { folderId: query.folderId } : {}), ...(query.q ? { name: { contains: query.q } } : {}) }, include: { connectedAccount: { select: { id: true, email: true, provider: true } }, folder: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } })
     return res.json({ files: files.map((file) => ({ ...file, sizeBytes: file.sizeBytes.toString() })) })
   } catch (error) {
@@ -236,3 +296,4 @@ fileRouter.delete('/:id', async (req: AuthRequest, res, next) => {
     return next(error)
   }
 })
+

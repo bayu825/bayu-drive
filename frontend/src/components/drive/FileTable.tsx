@@ -18,7 +18,7 @@ export function FileTable({ files, mode = 'default', selectedFileIds = new Set<s
           const selected = selectedFileIds.has(file.id ?? '')
           const meta = mode === 'archived' ? file.location : mode === 'recent' ? file.openedDate : mode === 'starred' ? file.starredDate : file.date
           return (
-            <article key={file.id ?? file.name} onClick={() => onToggleFile?.(file)} onDoubleClick={() => onFileDoubleClick?.(file)} onContextMenu={(event) => onFileContextMenu?.(event, file)} className={selected ? 'overflow-hidden rounded-2xl border border-blue-200 bg-blue-50 p-4 shadow-sm' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm'}>
+            <article key={file.id ?? file.name} onClick={() => { if (window.matchMedia('(max-width: 768px)').matches) onFileDoubleClick?.(file); else onToggleFile?.(file) }} onDoubleClick={() => onFileDoubleClick?.(file)} onContextMenu={(event) => onFileContextMenu?.(event, file)} className={selected ? 'overflow-hidden rounded-2xl border border-blue-200 bg-blue-50 p-4 shadow-sm' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm'}>
               <div className="flex items-start gap-3">
                 {onToggleFile ? <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-blue-600" checked={selected} onChange={() => onToggleFile?.(file)} onClick={(event) => event.stopPropagation()} /> : null}
                 <div className="mt-0.5 shrink-0">{mode === 'starred' ? <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" /> : <FileIcon kind={file.kind} />}</div>

@@ -22,6 +22,9 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD:-root}@mysql:3306/${MYSQL_DATABASE:-9drive}
       APP_PORT: 4000
@@ -48,6 +51,16 @@ services:
       - backend
     ports:
       - "5173:80"
+
+  onlyoffice:
+    image: onlyoffice/documentserver:latest
+    restart: unless-stopped
+    environment:
+      - JWT_ENABLED=false
+      - ALLOW_PRIVATE_IP_ADDRESS=true
+    ports:
+      - "8080:80"
+
 
 volumes:
   mysql_data:

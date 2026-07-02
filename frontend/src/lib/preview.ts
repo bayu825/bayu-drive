@@ -15,12 +15,20 @@ const googleDocumentMimeTypes = new Set([
   'application/vnd.google-apps.presentation',
 ])
 
-export function getPreviewKind(mimeType: string | undefined): PreviewKind | null {
-  if (!mimeType) return null
-  if (mimeType.startsWith('image/') || mimeType === 'application/vnd.google-apps.drawing') return 'image'
-  if (mimeType.startsWith('video/')) return 'video'
-  if (mimeType === 'application/pdf' || googleDocumentMimeTypes.has(mimeType)) return 'document'
-  if (officeMimeTypes.has(mimeType)) return 'office'
+export function getPreviewKind(mimeType: string | undefined, fileName?: string): PreviewKind | null {
+  if (mimeType && mimeType.startsWith('image/') || mimeType === 'application/vnd.google-apps.drawing') return 'image'
+  if (mimeType && mimeType.startsWith('video/')) return 'video'
+  if (mimeType === 'application/pdf' || (mimeType && googleDocumentMimeTypes.has(mimeType))) return 'document'
+  if (mimeType && officeMimeTypes.has(mimeType)) return 'office'
+  
+  if (fileName) {
+    const lowerName = fileName.toLowerCase()
+    if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'].some(ext => lowerName.endsWith(ext))) return 'image'
+    if (['.mp4', '.webm', '.ogg', '.mov'].some(ext => lowerName.endsWith(ext))) return 'video'
+    if (lowerName.endsWith('.pdf')) return 'document'
+    if (['.xlsx', '.docx', '.pptx', '.xls', '.doc', '.ppt'].some(ext => lowerName.endsWith(ext))) return 'office'
+  }
+  
   return null
 }
 

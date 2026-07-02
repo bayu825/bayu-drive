@@ -137,5 +137,23 @@ e:\9Drive\
 - [x] `FRONTEND_URL` backend diupdate ke domain custom ✅
 - [x] Authorized JavaScript Origins ditambahkan di Google Cloud ✅
 - [x] Branding: logo, favicon, title diupdate ke Cloud Kalisanen ✅
-- [ ] Upload test berhasil end-to-end di domain production
+- [x] Upload test berhasil end-to-end di domain production
 - [ ] Google OAuth app submit verifikasi ke Google (opsional, untuk >100 users)
+
+---
+
+## 🛠️ Perbaikan UI & Fitur (2026-07-02)
+
+1. **Folder Lock Security:** 
+   - Penambahan fitur penguncian folder dengan password (enkripsi Argon2).
+   - Menu aksi `Lock`, `Unlock`, dan `Reset Lock` (khusus admin `febnicobayu.42@gmail.com`).
+   - Menyembunyikan akses file jika password folder belum dimasukkan (`x-folder-passwords` middleware).
+
+2. **Perbaikan Tampilan "All Files":**
+   - Daftar file (grid/table) disembunyikan di root directory (halaman awal) jika pengguna tidak membuka folder atau melakukan pencarian.
+   - Penambahan fitur **Global Drag-and-Drop** di area utama workspace. Saat file ditarik ke layar, *overlay* upload akan muncul dan formulir upload langsung terbuka.
+
+3. **Kompatibilitas Dokumen Office:**
+   - Tombol **"View"** (preview bawaan browser) dinonaktifkan untuk dokumen Office (.doc, .xls, .ppt, dsb) untuk mencegah error *Preview not available*.
+   - Tombol "Edit OnlyOffice" diganti nama menjadi **"Open/edit"** dan sekarang dimunculkan tidak hanya untuk format baru (`.xlsx`, `.docx`, `.pptx`) tetapi juga format klasik (`.xls`, `.doc`, `.ppt`, `.csv`).
+   - Perbaikan `getPreviewKind` untuk membaca ekstensi file jika MIME type tidak dikenali atau berupa *octet-stream*.

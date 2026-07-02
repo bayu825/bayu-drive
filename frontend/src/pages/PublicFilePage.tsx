@@ -39,7 +39,7 @@ export function PublicFilePage({ embed = false }: { embed?: boolean }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const previewUrl = `${API_URL}/public/files/${token}/preview`
   const downloadUrl = `${API_URL}/public/files/${token}/download`
-  const kind = getPreviewKind(file?.mimeType)
+  const kind = getPreviewKind(file?.mimeType, file?.name)
 
   useEffect(() => {
     setFailed(false)

@@ -47,7 +47,7 @@ export function FileGrid({ files, selectedFileIds = new Set<string>(), onFileCon
       {files.map((file) => {
         const selected = selectedFileIds.has(file.id ?? '')
         return (
-          <Card key={file.id ?? file.name} onClick={() => onToggleFile?.(file)} onDoubleClick={() => onFileDoubleClick?.(file)} onContextMenu={(event) => onFileContextMenu?.(event, file)} className={selected ? 'relative cursor-pointer overflow-hidden border-blue-200 bg-blue-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md' : 'relative cursor-pointer overflow-hidden p-4 transition hover:-translate-y-0.5 hover:shadow-md'}>
+          <Card key={file.id ?? file.name} onClick={() => { if (window.matchMedia('(max-width: 768px)').matches) onFileDoubleClick?.(file); else onToggleFile?.(file) }} onDoubleClick={() => onFileDoubleClick?.(file)} onContextMenu={(event) => onFileContextMenu?.(event, file)} className={selected ? 'relative cursor-pointer overflow-hidden border-blue-200 bg-blue-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md' : 'relative cursor-pointer overflow-hidden p-4 transition hover:-translate-y-0.5 hover:shadow-md'}>
             <div className="flex items-start justify-between gap-2">
               <input type="checkbox" className="h-5 w-5 shrink-0 accent-blue-600" checked={selected} onChange={() => onToggleFile?.(file)} onClick={(event) => event.stopPropagation()} />
               <button className="-mr-2 -mt-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-white/80" onClick={(event) => { event.stopPropagation(); onFileContextMenu?.(event, file) }} aria-label={`Open ${file.name} menu`}><MoreVertical className="h-5 w-5" /></button>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent, type MouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Archive, CheckCircle, ChevronDown, ClipboardPaste, FolderInput, FolderPlus, LayoutGrid, List, MoreVertical, RefreshCw, Star, Trash2, Upload, X } from 'lucide-react'
+import { Archive, CheckCircle, ChevronDown, ClipboardPaste, FilePlus, FolderInput, FolderPlus, LayoutGrid, List, MoreVertical, RefreshCw, Star, Trash2, Upload, X, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { DummyModal } from '@/components/drive/DummyModal'
@@ -10,8 +10,10 @@ import { FileDetailsDrawer } from '@/components/drive/FileDetailsDrawer'
 import { FileGrid } from '@/components/drive/FileGrid'
 import { FileTable } from '@/components/drive/FileTable'
 import { FolderContextMenu } from '@/components/drive/FolderContextMenu'
+import { NewFileForm } from '@/components/drive/NewFileForm'
 import { FolderGrid } from '@/components/drive/FolderGrid'
 import { defaultFolderColor, defaultFolderIconUrl, FolderVisual, folderColorOptions, folderIconOptions, normalizeFolderColor } from '@/components/drive/FolderVisual'
+import { OnlyOfficeEditor } from '@/components/drive/OnlyOfficeEditor'
 import { PageHeader } from '@/components/drive/PageHeader'
 import { Input } from '@/components/ui/input'
 import { API_URL, apiFetch, formatBytes, formatDate } from '@/lib/api'
@@ -21,7 +23,7 @@ import { getPreviewKind, officeViewerUrl } from '@/lib/preview'
 import type { FileItem, FolderItem } from '@/data/drive-data'
 
 type BackendFile = { id: string; name: string; mimeType: string; sizeBytes: string; createdAt: string; folderId?: string | null; connectedAccount?: { email: string; provider: string }; folder?: { id: string; name: string } | null }
-type BackendFolder = { id: string; name: string; color: string; iconUrl?: string | null; parentId?: string | null; updatedAt: string }
+type BackendFolder = { id: string; name: string; color: string; iconUrl?: string | null; parentId?: string | null; updatedAt: string; isLocked?: boolean }
 type UploadProgressStatus = 'uploading' | 'done' | 'error' | 'partial'
 type UploadProgressFile = { name: string; size: number; percent: number; status: UploadProgressStatus }
 type UploadProgressState = { open: boolean; fileName: string; percent: number; status: UploadProgressStatus; files: UploadProgressFile[] }
@@ -53,7 +55,7 @@ function mapFile(file: BackendFile): FileItem {
 }
 
 function mapFolder(folder: BackendFolder): FolderItem {
-  return { id: folder.id, name: folder.name, color: folder.color, iconUrl: folder.iconUrl, parentId: folder.parentId, updated: `Updated ${formatDate(folder.updatedAt)}` }
+  return { id: folder.id, name: folder.name, color: folder.color, iconUrl: folder.iconUrl, parentId: folder.parentId, updated: `Updated ${formatDate(folder.updatedAt)}`, isLocked: folder.isLocked }
 }
 
 function estimateUploadProgress(files: File[], percent: number, status: UploadProgressStatus): UploadProgressFile[] {
@@ -83,12 +85,14 @@ export function AllFilesPage() {
   const searchQuery = searchParams.get('q')?.trim() ?? ''
   const [uploadOpen, setUploadOpen] = useState(false)
   const [folderOpen, setFolderOpen] = useState(false)
+  const [newFileOpen, setNewFileOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [folderRenameOpen, setFolderRenameOpen] = useState(false)
   const [folderDeleteOpen, setFolderDeleteOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [onlyOfficeOpen, setOnlyOfficeOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [shareUrl, setShareUrl] = useState('')
@@ -128,6 +132,13 @@ export function AllFilesPage() {
   const [inviteTargetId, setInviteTargetId] = useState('')
   const [inviteMessage, setInviteMessage] = useState('')
   const [inviting, setInviting] = useState(false)
+  const [lockOpen, setLockOpen] = useState(false)
+  const [unlockOpen, setUnlockOpen] = useState(false)
+  const [lockPassword, setLockPassword] = useState('')
+  const [folderPromptOpen, setFolderPromptOpen] = useState(false)
+  const [folderPromptId, setFolderPromptId] = useState<string | null>(null)
+  const [isMainDragging, setIsMainDragging] = useState(false)
+  const dragCounter = useRef(0)
   const previewVideoRef = useRef<HTMLVideoElement | null>(null)
   const previewBlobUrlRef = useRef<string | null>(null)
 
@@ -152,7 +163,16 @@ export function AllFilesPage() {
   }
 
   async function loadAll() {
-    await Promise.all([loadFiles(), loadFolders()])
+    try {
+      await Promise.all([loadFiles(), loadFolders()])
+    } catch (error: any) {
+      if (error.message === 'Folder is locked.') {
+        setFolderPromptId(activeFolderId)
+        setFolderPromptOpen(true)
+      } else {
+        throw error
+      }
+    }
   }
 
   useEffect(() => {
@@ -268,6 +288,29 @@ export function AllFilesPage() {
     if (event.type === 'dragenter' || event.type === 'dragover') setIsUploadDragging(true)
     if (event.type === 'dragleave' || event.type === 'drop') setIsUploadDragging(false)
     if (event.type === 'drop') selectUploadFiles(event.dataTransfer.files)
+  }
+
+  function handleMainDrag(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.type === 'dragenter') {
+      dragCounter.current += 1
+      setIsMainDragging(true)
+    }
+    if (event.type === 'dragleave') {
+      dragCounter.current -= 1
+      if (dragCounter.current === 0) {
+        setIsMainDragging(false)
+      }
+    }
+    if (event.type === 'drop') {
+      dragCounter.current = 0
+      setIsMainDragging(false)
+      if (event.dataTransfer?.files?.length > 0) {
+        selectUploadFiles(event.dataTransfer.files)
+        setUploadOpen(true)
+      }
+    }
   }
 
   function uploadWithProgress(form: FormData, onProgress: (percent: number) => void) {
@@ -389,6 +432,37 @@ export function AllFilesPage() {
     }
   }
 
+  async function editFileInOnlyOffice(eventOrFile?: any) {
+    const isFile = eventOrFile && typeof eventOrFile === 'object' && 'id' in eventOrFile;
+    const targetFile = isFile ? (eventOrFile as FileItem) : activeFile;
+    if (!targetFile?.id) return
+    if (isFile) setActiveFile(targetFile)
+
+    setPreviewUrl('')
+    setPreviewError('')
+    setPreviewLoading(true)
+    setOnlyOfficeOpen(true)
+    setContextMenu({ x: 0, y: 0, file: null })
+    try {
+      const data = await apiFetch<{ path?: string; url: string }>(`/files/${targetFile.id}/preview-token`, { method: 'POST' })
+      const streamUrl = `${API_URL}${data.path ?? new URL(data.url).pathname}`
+      setPreviewUrl(streamUrl)
+    } catch (error) {
+      setPreviewError(error instanceof Error ? error.message : 'Failed to load document')
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  function handleFileDoubleClick(file: FileItem) {
+    const isOffice = ['xlsx', 'docx', 'pptx', 'xls', 'doc', 'ppt'].some(ext => (file.name || '').toLowerCase().trim().endsWith('.' + ext))
+    if (isOffice) {
+      editFileInOnlyOffice(file)
+    } else {
+      viewFile(file)
+    }
+  }
+
   async function downloadFile() {
     if (!activeFile?.id) return
     const response = await fetch(`${API_URL}/files/${activeFile.id}/download`, { headers: { Authorization: `Bearer ${getAccessToken()}` } })
@@ -498,6 +572,64 @@ export function AllFilesPage() {
     await loadFolders()
   }
 
+  async function toggleFolderLock() {
+    if (!activeFolderForMenu?.id) return
+    setLockPassword('')
+    if (activeFolderForMenu.isLocked) {
+      setUnlockOpen(true)
+    } else {
+      setLockOpen(true)
+    }
+    setFolderContextMenu({ x: 0, y: 0, folder: null })
+  }
+
+  async function lockFolder(event: FormEvent) {
+    event.preventDefault()
+    if (!activeFolderForMenu?.id) return
+    try {
+      await apiFetch(`/folders/${activeFolderForMenu.id}/lock`, { method: 'POST', body: JSON.stringify({ password: lockPassword }) })
+      setLockOpen(false)
+      await loadFolders()
+    } catch (error: any) {
+      setMessage(error.message || 'Failed to lock folder')
+    }
+  }
+
+  async function unlockFolder(event: FormEvent) {
+    event.preventDefault()
+    if (!activeFolderForMenu?.id) return
+    try {
+      await apiFetch(`/folders/${activeFolderForMenu.id}/unlock`, { method: 'POST', body: JSON.stringify({ password: lockPassword }) })
+      setUnlockOpen(false)
+      await loadFolders()
+    } catch (error: any) {
+      setMessage(error.message || 'Failed to unlock folder')
+    }
+  }
+
+  async function resetFolderLock() {
+    if (!activeFolderForMenu?.id) return
+    try {
+      await apiFetch(`/folders/${activeFolderForMenu.id}/reset-lock`, { method: 'POST' })
+      await loadFolders()
+      setFolderContextMenu({ x: 0, y: 0, folder: null })
+      setMessage('Folder lock reset successfully.')
+    } catch (error: any) {
+      setMessage(error.message || 'Failed to reset lock')
+    }
+  }
+
+  async function submitFolderPassword(event: FormEvent) {
+    event.preventDefault()
+    if (!folderPromptId) return
+    const current = JSON.parse(localStorage.getItem('folder_passwords') || '{}')
+    current[folderPromptId] = lockPassword
+    localStorage.setItem('folder_passwords', JSON.stringify(current))
+    setFolderPromptOpen(false)
+    setLockPassword('')
+    await loadAll().catch((error) => setMessage(error instanceof Error ? error.message : 'Failed to load files'))
+  }
+
   function cutSelectedFolder(folder: FolderItem | null) {
     if (!folder?.id) return
     setCutFolder(folder)
@@ -542,26 +674,39 @@ export function AllFilesPage() {
   })()
   const allVisibleSelected = files.length > 0 && files.every((file) => file.id && selectedFileIds.has(file.id))
   const uploadPanelTitle = uploadProgress.status === 'done' ? 'Upload complete' : uploadProgress.status === 'partial' ? 'Upload completed with errors' : uploadProgress.status === 'error' ? 'Upload failed' : uploadProgress.percent >= 99 ? 'Processing on server' : 'Uploading files'
-  const activePreviewKind = getPreviewKind(activeFile?.mimeType)
+  const activePreviewKind = getPreviewKind(activeFile?.mimeType, activeFile?.name)
 
   return (
     <>
-      <div onContextMenu={openEmptyContextMenu} className="min-h-[620px] w-full min-w-0">
-      <PageHeader title={activeFolder ? <span className="block min-w-0 truncate"><button className="text-blue-600 hover:underline" onClick={closeFolder}>All Files</button>{folderBreadcrumbs.map((folder, index) => <span key={folder.id}><span className="text-slate-400"> / </span>{index === folderBreadcrumbs.length - 1 ? <span>{folder.name}</span> : <button className="text-blue-600 hover:underline" onClick={() => folder.id && openFolderById(folder.id)}>{folder.name}</button>}</span>)}</span> : 'All Files'} actions={<><Button className="w-full" onClick={() => setUploadOpen(true)}><Upload className="h-4 w-4" />Upload</Button><Button className="w-full" variant="outline" onClick={() => setFolderOpen(true)}><FolderPlus className="h-4 w-4" />New Folder</Button><Button className="w-full" variant="outline" disabled={syncingDrive} onClick={syncGoogleDrive}><RefreshCw className={syncingDrive ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{syncingDrive ? 'Syncing...' : 'Sync Drive'}</Button></>} />
+      <div onContextMenu={openEmptyContextMenu} onDragEnter={handleMainDrag} onDragOver={handleMainDrag} onDragLeave={handleMainDrag} onDrop={handleMainDrag} className="relative min-h-[620px] w-full min-w-0">
+        {isMainDragging && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center rounded-3xl border-4 border-dashed border-blue-500 bg-blue-50/90 backdrop-blur-sm">
+            <div className="pointer-events-none text-center">
+              <Upload className="mx-auto h-12 w-12 animate-bounce text-blue-600" />
+              <h2 className="mt-4 text-2xl font-bold text-blue-700">Drop files to upload</h2>
+              <p className="text-blue-600/80">Files will be uploaded to {activeFolder ? activeFolder.name : 'All Files'}</p>
+            </div>
+          </div>
+        )}
+      <PageHeader title={activeFolder ? <span className="block min-w-0 truncate"><button className="text-blue-600 hover:underline" onClick={closeFolder}>All Files</button>{folderBreadcrumbs.map((folder, index) => <span key={folder.id}><span className="text-slate-400"> / </span>{index === folderBreadcrumbs.length - 1 ? <span>{folder.name}</span> : <button className="text-blue-600 hover:underline" onClick={() => folder.id && openFolderById(folder.id)}>{folder.name}</button>}</span>)}</span> : 'All Files'} actions={<><Button className="w-full" onClick={() => setUploadOpen(true)}><Upload className="h-4 w-4" />Upload</Button><Button className="w-full" variant="outline" onClick={() => setNewFileOpen(true)}><FilePlus className="h-4 w-4" />New File</Button><Button className="w-full" variant="outline" onClick={() => setFolderOpen(true)}><FolderPlus className="h-4 w-4" />New Folder</Button><Button className="w-full" variant="outline" disabled={syncingDrive} onClick={syncGoogleDrive}><RefreshCw className={syncingDrive ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{syncingDrive ? 'Syncing...' : 'Sync Drive'}</Button></>} />
       {message ? <p className="mt-5 rounded-xl bg-blue-50 p-3 text-sm text-blue-700">{message}</p> : null}
       {!activeFolder && (recentFolders.length > 0 ? <FolderGrid items={recentFolders} mobileTwoColumns onFolderMenu={openFolderMenu} onFolderOpen={openFolder} /> : <p className="mt-8 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">No folders yet. Click New Folder to organize uploads.</p>)}
-      {!activeFolder && moreFolders.length > 0 ? <Card className="mt-5 p-4 sm:p-5"><h2 className="font-extrabold">More Folders</h2><div className="mt-4 grid gap-3 sm:grid-cols-2">{moreFolders.map((folder) => <div key={folder.id} onDoubleClick={() => openFolder(folder)} onContextMenu={(event) => openFolderMenu(event, folder)} className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 hover:bg-slate-100"><div className="flex min-w-0 items-center gap-3"><FolderVisual folder={folder} className="h-6 w-6 shrink-0" /><div className="min-w-0"><p className="truncate font-semibold">{folder.name}</p><p className="truncate text-xs text-slate-500">{folder.updated}</p></div></div><button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-white sm:h-8 sm:w-8 sm:rounded-lg" onClick={(event) => { event.stopPropagation(); openFolderMenu(event, folder) }} aria-label={`Open ${folder.name} menu`}><MoreVertical className="h-5 w-5" /></button></div>)}</div></Card> : null}
-      {activeFolder && folders.length > 0 ? <Card className="mt-5 p-4 sm:p-5"><h2 className="font-extrabold">Folders</h2><div className="mt-4 grid gap-3 sm:grid-cols-2">{folders.map((folder) => <div key={folder.id} onDoubleClick={() => openFolder(folder)} onContextMenu={(event) => openFolderMenu(event, folder)} className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 hover:bg-slate-100"><div className="flex min-w-0 items-center gap-3"><FolderVisual folder={folder} className="h-6 w-6 shrink-0" /><div className="min-w-0"><p className="truncate font-semibold">{folder.name}</p><p className="truncate text-xs text-slate-500">{folder.updated}</p></div></div><button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-white sm:h-8 sm:w-8 sm:rounded-lg" onClick={(event) => { event.stopPropagation(); openFolderMenu(event, folder) }} aria-label={`Open ${folder.name} menu`}><MoreVertical className="h-5 w-5" /></button></div>)}</div></Card> : null}
-      <div className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-3"><Button variant="soft" className="hidden sm:inline-flex"><Archive className="h-4 w-4" />Recents</Button><Button variant="soft" className="hidden sm:inline-flex"><Star className="h-4 w-4" />Starred</Button>{selectedFileIds.size > 0 ? <div className="flex w-full flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-3 sm:w-auto sm:flex-row sm:items-center sm:border-0 sm:bg-transparent sm:p-0"><span className="text-sm font-extrabold text-slate-700">{selectedFileIds.size} selected</span><div className="grid grid-cols-3 gap-2 sm:flex sm:gap-3"><Button className="w-full" variant="outline" onClick={() => setMoveOpen(true)}><FolderInput className="h-4 w-4" />Move</Button><Button className="w-full" variant="danger" onClick={() => setDeleteOpen(true)}><Trash2 className="h-4 w-4" />Delete</Button><Button className="w-full" variant="ghost" onClick={clearSelection}>Clear</Button></div></div> : null}</div>
-        <div className="flex gap-3"><Button variant={fileViewMode === 'grid' ? 'soft' : 'outline'} size="icon" aria-label="Show files as grid" aria-pressed={fileViewMode === 'grid'} onClick={() => changeFileViewMode('grid')}><LayoutGrid className="h-5 w-5" /></Button><Button variant={fileViewMode === 'list' ? 'soft' : 'outline'} size="icon" aria-label="Show files as list" aria-pressed={fileViewMode === 'list'} onClick={() => changeFileViewMode('list')}><List className="h-5 w-5" /></Button></div>
-      </div>
-      {cutFolder ? <p className="mt-5 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-700"><ClipboardPaste className="mr-2 inline h-4 w-4" />Cut folder: {cutFolder.name}. Press Ctrl+V or right-click empty area to paste here.</p> : null}
-      {files.length === 0 ? <p className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">{searchQuery ? `No files found for "${searchQuery}".` : activeFolder ? 'No files in this folder yet.' : 'No uploaded files yet. Connect Google Drive in Settings, then upload a file.'}</p> : fileViewMode === 'grid' ? <FileGrid files={files} selectedFileIds={selectedFileIds} onToggleFile={toggleFileSelection} onFileDoubleClick={viewFile} onFileContextMenu={openContext} /> : <FileTable files={files} selectedFileIds={selectedFileIds} allSelected={allVisibleSelected} onToggleFile={toggleFileSelection} onToggleAll={toggleAllVisibleFiles} onFileDoubleClick={viewFile} onFileContextMenu={openContext} />}
+      {!activeFolder && moreFolders.length > 0 ? <Card className="mt-5 p-4 sm:p-5"><h2 className="font-extrabold">More Folders</h2><div className="mt-4 grid gap-3 sm:grid-cols-2">{moreFolders.map((folder) => <div key={folder.id} onDoubleClick={() => openFolder(folder)} onClick={() => { if (window.matchMedia('(max-width: 768px)').matches) openFolder(folder) }} onContextMenu={(event) => openFolderMenu(event, folder)} className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 hover:bg-slate-100"><div className="flex min-w-0 items-center gap-3"><FolderVisual folder={folder} className="h-6 w-6 shrink-0" /><div className="min-w-0 flex items-center gap-2"><p className="truncate font-semibold">{folder.name}</p>{folder.isLocked && <Lock className="h-3 w-3 text-slate-400" />}</div></div><button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-white sm:h-8 sm:w-8 sm:rounded-lg" onClick={(event) => { event.stopPropagation(); openFolderMenu(event, folder) }} aria-label={`Open ${folder.name} menu`}><MoreVertical className="h-5 w-5" /></button></div>)}</div></Card> : null}
+      {activeFolder && folders.length > 0 ? <Card className="mt-5 p-4 sm:p-5"><h2 className="font-extrabold">Folders</h2><div className="mt-4 grid gap-3 sm:grid-cols-2">{folders.map((folder) => <div key={folder.id} onDoubleClick={() => openFolder(folder)} onClick={() => { if (window.matchMedia('(max-width: 768px)').matches) openFolder(folder) }} onContextMenu={(event) => openFolderMenu(event, folder)} className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 hover:bg-slate-100"><div className="flex min-w-0 items-center gap-3"><FolderVisual folder={folder} className="h-6 w-6 shrink-0" /><div className="min-w-0 flex items-center gap-2"><p className="truncate font-semibold">{folder.name}</p>{folder.isLocked && <Lock className="h-3 w-3 text-slate-400" />}</div></div><button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-white sm:h-8 sm:w-8 sm:rounded-lg" onClick={(event) => { event.stopPropagation(); openFolderMenu(event, folder) }} aria-label={`Open ${folder.name} menu`}><MoreVertical className="h-5 w-5" /></button></div>)}</div></Card> : null}
+      {(activeFolder || searchQuery) && (
+        <>
+          <div className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-3"><Button variant="soft" className="hidden sm:inline-flex"><Archive className="h-4 w-4" />Recents</Button><Button variant="soft" className="hidden sm:inline-flex"><Star className="h-4 w-4" />Starred</Button>{selectedFileIds.size > 0 ? <div className="flex w-full flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-3 sm:w-auto sm:flex-row sm:items-center sm:border-0 sm:bg-transparent sm:p-0"><span className="text-sm font-extrabold text-slate-700">{selectedFileIds.size} selected</span><div className="grid grid-cols-3 gap-2 sm:flex sm:gap-3"><Button className="w-full" variant="outline" onClick={() => setMoveOpen(true)}><FolderInput className="h-4 w-4" />Move</Button><Button className="w-full" variant="danger" onClick={() => setDeleteOpen(true)}><Trash2 className="h-4 w-4" />Delete</Button><Button className="w-full" variant="ghost" onClick={clearSelection}>Clear</Button></div></div> : null}</div>
+            <div className="flex gap-3"><Button variant={fileViewMode === 'grid' ? 'soft' : 'outline'} size="icon" aria-label="Show files as grid" aria-pressed={fileViewMode === 'grid'} onClick={() => changeFileViewMode('grid')}><LayoutGrid className="h-5 w-5" /></Button><Button variant={fileViewMode === 'list' ? 'soft' : 'outline'} size="icon" aria-label="Show files as list" aria-pressed={fileViewMode === 'list'} onClick={() => changeFileViewMode('list')}><List className="h-5 w-5" /></Button></div>
+          </div>
+          {cutFolder ? <p className="mt-5 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-700"><ClipboardPaste className="mr-2 inline h-4 w-4" />Cut folder: {cutFolder.name}. Press Ctrl+V or right-click empty area to paste here.</p> : null}
+          {files.length === 0 ? <p className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">{searchQuery ? `No files found for "${searchQuery}".` : activeFolder ? 'No files in this folder yet.' : 'No uploaded files yet. Connect Google Drive in Settings, then upload a file.'}</p> : fileViewMode === 'grid' ? <FileGrid files={files} selectedFileIds={selectedFileIds} onToggleFile={toggleFileSelection} onFileDoubleClick={handleFileDoubleClick} onFileContextMenu={openContext} /> : <FileTable files={files} selectedFileIds={selectedFileIds} allSelected={allVisibleSelected} onToggleFile={toggleFileSelection} onToggleAll={toggleAllVisibleFiles} onFileDoubleClick={handleFileDoubleClick} onFileContextMenu={openContext} />}
+        </>
+      )}
       </div>
       <EmptyAreaContextMenu x={emptyContextMenu.x} y={emptyContextMenu.y} open={emptyContextMenu.open} canPasteFolder={Boolean(cutFolder)} onClose={() => setEmptyContextMenu({ x: 0, y: 0, open: false })} onUpload={() => { setUploadOpen(true); setEmptyContextMenu({ x: 0, y: 0, open: false }) }} onCreateFolder={() => { setFolderOpen(true); setEmptyContextMenu({ x: 0, y: 0, open: false }) }} onPasteFolder={() => { pasteFolder().catch((error) => setMessage(error instanceof Error ? error.message : 'Failed to paste folder')); setEmptyContextMenu({ x: 0, y: 0, open: false }) }} />
-      <FileContextMenu x={contextMenu.x} y={contextMenu.y} file={contextMenu.file} onClose={() => setContextMenu({ x: 0, y: 0, file: null })} onView={viewFile} onDownload={downloadFile} onRename={() => { setRenameValue(activeFile?.name ?? ''); setRenameOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onMove={() => { setMoveOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onDetails={() => { setDetailOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onShare={shareFile} onInvite={inviteToFile} onDelete={() => { setDeleteOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} />
-      <FolderContextMenu x={folderContextMenu.x} y={folderContextMenu.y} folder={folderContextMenu.folder} onClose={() => setFolderContextMenu({ x: 0, y: 0, folder: null })} onCut={() => cutSelectedFolder(activeFolderForMenu)} onRename={() => { setFolderRenameValue(activeFolderForMenu?.name ?? ''); setFolderRenameColor(normalizeFolderColor(activeFolderForMenu?.color)); setFolderRenameIconUrl(activeFolderForMenu?.iconUrl ?? defaultFolderIconUrl); setFolderRenameOpen(true); setFolderContextMenu({ x: 0, y: 0, folder: null }) }} onInvite={inviteToFolder} onDelete={() => { setFolderDeleteOpen(true); setFolderContextMenu({ x: 0, y: 0, folder: null }) }} />
+      <FileContextMenu x={contextMenu.x} y={contextMenu.y} file={contextMenu.file} onClose={() => setContextMenu({ x: 0, y: 0, file: null })} onView={viewFile} onDownload={downloadFile} onRename={() => { setRenameValue(activeFile?.name ?? ''); setRenameOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onMove={() => { setMoveOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onDetails={() => { setDetailOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onShare={shareFile} onInvite={inviteToFile} onDelete={() => { setDeleteOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onEditOnlyOffice={editFileInOnlyOffice} />
+      <FolderContextMenu x={folderContextMenu.x} y={folderContextMenu.y} folder={folderContextMenu.folder} onClose={() => setFolderContextMenu({ x: 0, y: 0, folder: null })} onCut={() => cutSelectedFolder(activeFolderForMenu)} onRename={() => { setFolderRenameValue(activeFolderForMenu?.name ?? ''); setFolderRenameColor(normalizeFolderColor(activeFolderForMenu?.color)); setFolderRenameIconUrl(activeFolderForMenu?.iconUrl ?? defaultFolderIconUrl); setFolderRenameOpen(true); setFolderContextMenu({ x: 0, y: 0, folder: null }) }} onInvite={inviteToFolder} onDelete={() => { setFolderDeleteOpen(true); setFolderContextMenu({ x: 0, y: 0, folder: null }) }} onLockToggle={toggleFolderLock} onResetLock={resetFolderLock} />
       <FileDetailsDrawer open={detailOpen} file={activeFile} onClose={() => setDetailOpen(false)} />
 
       <DummyModal open={uploadOpen} title="Upload File" description="Stream file directly to selected Google Drive account." onClose={() => setUploadOpen(false)}>
@@ -576,6 +721,9 @@ export function AllFilesPage() {
           {selectedFiles.length > 0 ? <div className="grid max-h-56 gap-2 overflow-y-auto rounded-xl bg-slate-50 p-3 text-sm text-slate-600"><div className="flex items-center justify-between gap-3"><span className="font-bold text-slate-950">{selectedFiles.length} selected</span><span className="shrink-0">{formatBytes(selectedFiles.reduce((total, file) => total + file.size, 0))}</span></div>{selectedFiles.map((file, index) => <div key={`${file.name}-${file.size}-${index}`} className="flex min-w-0 items-center justify-between gap-3 rounded-lg bg-white px-3 py-2"><span className="min-w-0 flex-1 truncate" title={file.name}>{file.name}</span><span className="shrink-0 text-xs text-slate-500">{formatBytes(file.size)}</span><button type="button" className="shrink-0 text-slate-500 hover:text-red-600" onClick={() => removeUploadFile(index)} aria-label={`Remove ${file.name}`}><X className="h-4 w-4" /></button></div>)}</div> : null}
           <div className="grid gap-3 sm:flex sm:justify-end"><Button type="button" variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button><Button disabled={loading || selectedFiles.length === 0}>{loading ? 'Uploading...' : `Upload${selectedFiles.length > 1 ? ` ${selectedFiles.length} files` : ''}`}</Button></div>
         </form>
+      </DummyModal>
+      <DummyModal open={newFileOpen} title="New File" description="Create an empty document and edit it in OnlyOffice." onClose={() => setNewFileOpen(false)}>
+        <NewFileForm onSuccess={() => { setNewFileOpen(false); loadFiles() }} folderId={activeFolderId} />
       </DummyModal>
        <DummyModal open={folderOpen} title="New Folder" description="Create a virtual folder for organizing files." onClose={() => setFolderOpen(false)}>
         <form onSubmit={createFolder} className="grid gap-4">
@@ -633,6 +781,33 @@ export function AllFilesPage() {
           </div>
         </div>
       ) : null}
+
+      <DummyModal open={lockOpen} title="Lock Folder" description={`Set a password to lock "${activeFolderForMenu?.name}".`} onClose={() => setLockOpen(false)}>
+        <form onSubmit={lockFolder} className="grid gap-4">
+          <label className="grid gap-2 text-sm font-semibold">Password<Input type="password" value={lockPassword} onChange={(e) => setLockPassword(e.target.value)} required /></label>
+          <div className="flex justify-end gap-3"><Button type="button" variant="outline" onClick={() => setLockOpen(false)}>Cancel</Button><Button>Lock</Button></div>
+        </form>
+      </DummyModal>
+      <DummyModal open={unlockOpen} title="Unlock Folder" description={`Remove the password from "${activeFolderForMenu?.name}".`} onClose={() => setUnlockOpen(false)}>
+        <form onSubmit={unlockFolder} className="grid gap-4">
+          <label className="grid gap-2 text-sm font-semibold">Password<Input type="password" value={lockPassword} onChange={(e) => setLockPassword(e.target.value)} required /></label>
+          <div className="flex justify-end gap-3"><Button type="button" variant="outline" onClick={() => setUnlockOpen(false)}>Cancel</Button><Button>Unlock</Button></div>
+        </form>
+      </DummyModal>
+      <DummyModal open={folderPromptOpen} title="Folder Locked" description="Please enter the password to access this folder." onClose={() => { setFolderPromptOpen(false); closeFolder(); }}>
+        <form onSubmit={submitFolderPassword} className="grid gap-4">
+          <label className="grid gap-2 text-sm font-semibold">Password<Input type="password" value={lockPassword} onChange={(e) => setLockPassword(e.target.value)} required autoFocus /></label>
+          <div className="flex justify-end gap-3"><Button type="button" variant="outline" onClick={() => { setFolderPromptOpen(false); closeFolder(); }}>Go Back</Button><Button>Enter</Button></div>
+        </form>
+      </DummyModal>
+
+      {onlyOfficeOpen && activeFile && previewUrl && (
+        <OnlyOfficeEditor
+          file={{ id: activeFile.id!, name: activeFile.name, mimeType: activeFile.mimeType || 'application/octet-stream', sizeBytes: activeFile.sizeBytes || '0' }}
+          previewUrl={previewUrl}
+          onClose={() => { setOnlyOfficeOpen(false); setPreviewUrl('') }}
+        />
+      )}
     </>
   )
 }
