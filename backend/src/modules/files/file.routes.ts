@@ -259,24 +259,35 @@ fileRouter.get('/:id/view-url', async (req: AuthRequest, res, next) => {
     const fileId = String(req.params.id)
     const file = await prisma.file.findFirstOrThrow({ where: { id: fileId, userId: req.user!.id }, include: { connectedAccount: true } })
     if (file.provider === 's3') return res.json({ url: null })
-    const auth = await getAuthedGoogleClient(file.connectedAccount)
-    const drive = google.drive({ version: 'v3', auth })
-    
-    try {
-      const user = await prisma.user.findUnique({ where: { id: req.user!.id } })
-      if (user && user.email) {
-        await drive.permissions.create({
-          fileId: file.providerFileId,
-          requestBody: { role: 'writer', type: 'user', emailAddress: user.email },
-          sendNotificationEmail: false
-        })
-      }
-    } catch (permError) {
-      console.error('[files] Failed to set permission to specific user:', permError)
+
+    // Build the edit URL directly from the Drive file ID + mimeType.
+    // This avoids any Google API call that could fail due to expired tokens.
+    const pid = file.providerFileId
+    const mime = file.mimeType ?? ''
+    let viewUrl: string
+    if (mime === 'application/vnd.google-apps.spreadsheet' || mime.includes('spreadsheet') || mime.includes('excel') || /\.(xlsx|xls|csv)$/i.test(file.name)) {
+      viewUrl = `https://docs.google.com/spreadsheets/d/${pid}/edit`
+    } else if (mime === 'application/vnd.google-apps.document' || mime.includes('wordprocessingml') || /\.(docx|doc)$/i.test(file.name)) {
+      viewUrl = `https://docs.google.com/document/d/${pid}/edit`
+    } else if (mime === 'application/vnd.google-apps.presentation' || mime.includes('presentationml') || mime.includes('powerpoint') || /\.(pptx|ppt)$/i.test(file.name)) {
+      viewUrl = `https://docs.google.com/presentation/d/${pid}/edit`
+    } else {
+      viewUrl = `https://drive.google.com/file/d/${pid}/view`
     }
 
-    const metadata = await drive.files.get({ fileId: file.providerFileId, fields: 'webViewLink,webContentLink' })
-    return res.json({ url: metadata.data.webViewLink ?? metadata.data.webContentLink })
+    // Fire-and-forget: try to make the file shareable so any Google account can open it.
+    // We do NOT await — a failure here must NOT block the redirect.
+    getAuthedGoogleClient(file.connectedAccount)
+      .then((auth) => {
+        const drive = google.drive({ version: 'v3', auth })
+        return drive.permissions.create({
+          fileId: pid,
+          requestBody: { role: 'writer', type: 'anyone' },
+        })
+      })
+      .catch((permError) => console.error('[files/view-url] set permission failed (non-fatal):', permError))
+
+    return res.json({ url: viewUrl })
   } catch (error) {
     return next(error)
   }
