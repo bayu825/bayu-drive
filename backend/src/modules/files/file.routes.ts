@@ -261,7 +261,7 @@ fileRouter.get('/:id/view-url', async (req: AuthRequest, res, next) => {
     if (file.provider === 's3') return res.json({ url: null })
 
     // Build the edit URL directly from the Drive file ID + mimeType.
-    // This avoids any Google API call that could fail due to expired tokens.
+    // This avoids any Google API call for URL construction.
     const pid = file.providerFileId
     const mime = file.mimeType ?? ''
     let viewUrl: string
@@ -275,17 +275,23 @@ fileRouter.get('/:id/view-url', async (req: AuthRequest, res, next) => {
       viewUrl = `https://drive.google.com/file/d/${pid}/view`
     }
 
-    // Fire-and-forget: try to make the file shareable so any Google account can open it.
-    // We do NOT await — a failure here must NOT block the redirect.
-    getAuthedGoogleClient(file.connectedAccount)
-      .then((auth) => {
-        const drive = google.drive({ version: 'v3', auth })
-        return drive.permissions.create({
-          fileId: pid,
-          requestBody: { role: 'writer', type: 'anyone' },
-        })
+    // BLOCKING: set permission so anyone can edit/view the file.
+    // If this fails (expired token), log a helpful message and still return the URL.
+    // The file may still open if the user is logged in as the Drive account owner.
+    try {
+      const auth = await getAuthedGoogleClient(file.connectedAccount)
+      const drive = google.drive({ version: 'v3', auth })
+      await drive.permissions.create({
+        fileId: pid,
+        requestBody: { role: 'writer', type: 'anyone' },
       })
-      .catch((permError) => console.error('[files/view-url] set permission failed (non-fatal):', permError))
+    } catch (permError: any) {
+      // Ignore 'already exists' (403 with cannotShareTeamDriveTopFolderWithAnyonePermission or duplicate)
+      const isAlreadyShared = permError?.code === 403 || String(permError?.message).includes('already')
+      if (!isAlreadyShared) {
+        console.error('[files/view-url] set permission failed — reconnect Google Drive account to fix:', permError?.message)
+      }
+    }
 
     return res.json({ url: viewUrl })
   } catch (error) {
