@@ -128,8 +128,13 @@ fileRouter.delete('/batch', async (req: AuthRequest, res, next) => {
         }
         deletedIds.push(file.id)
         syncedAccountIds.add(file.connectedAccountId)
-      } catch (error) {
-        failed.push({ fileId: file.id, message: error instanceof Error ? error.message : 'Delete failed' })
+      } catch (error: any) {
+        const isAuthOrMissing = file.connectedAccount?.status !== 'connected' || error?.code === 401 || error?.code === 403 || error?.code === 404 || String(error?.message).includes('invalid_grant') || String(error?.message).includes('suspended')
+        if (isAuthOrMissing) {
+          deletedIds.push(file.id)
+        } else {
+          failed.push({ fileId: file.id, message: error instanceof Error ? error.message : 'Delete failed' })
+        }
       }
     }
 
@@ -297,15 +302,27 @@ fileRouter.delete('/:id', async (req: AuthRequest, res, next) => {
   try {
     const fileId = String(req.params.id)
     const file = await prisma.file.findFirstOrThrow({ where: { id: fileId, userId: req.user!.id }, include: { connectedAccount: true } })
-    if (file.provider === 's3') await deleteS3Object(file)
-    else {
-      const auth = await getAuthedGoogleClient(file.connectedAccount)
-      const drive = google.drive({ version: 'v3', auth })
-      await drive.files.delete({ fileId: file.providerFileId })
+    let providerDeleteSuccess = true
+    try {
+      if (file.provider === 's3') await deleteS3Object(file)
+      else {
+        const auth = await getAuthedGoogleClient(file.connectedAccount)
+        const drive = google.drive({ version: 'v3', auth })
+        await drive.files.delete({ fileId: file.providerFileId })
+      }
+    } catch (error: any) {
+      const isAuthOrMissing = file.connectedAccount?.status !== 'connected' || error?.code === 401 || error?.code === 403 || error?.code === 404 || String(error?.message).includes('invalid_grant') || String(error?.message).includes('suspended')
+      if (!isAuthOrMissing) {
+        return res.status(400).json({ code: 'FILE_DELETE_FAILED', message: error instanceof Error ? error.message : 'Delete failed' })
+      }
+      providerDeleteSuccess = false
     }
+
     await prisma.file.update({ where: { id: file.id }, data: { status: 'deleted', deletedAt: new Date() } })
-    if (file.provider === 's3') await syncS3Quota(file.connectedAccountId)
-    else await syncGoogleQuota(file.connectedAccountId)
+    if (providerDeleteSuccess) {
+      if (file.provider === 's3') await syncS3Quota(file.connectedAccountId).catch(() => undefined)
+      else await syncGoogleQuota(file.connectedAccountId).catch(() => undefined)
+    }
     return res.json({ status: 'ok' })
   } catch (error) {
     return next(error)
