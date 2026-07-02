@@ -263,12 +263,16 @@ fileRouter.get('/:id/view-url', async (req: AuthRequest, res, next) => {
     const drive = google.drive({ version: 'v3', auth })
     
     try {
-      await drive.permissions.create({
-        fileId: file.providerFileId,
-        requestBody: { role: 'writer', type: 'anyone' }
-      })
+      const user = await prisma.user.findUnique({ where: { id: req.user!.id } })
+      if (user && user.email) {
+        await drive.permissions.create({
+          fileId: file.providerFileId,
+          requestBody: { role: 'writer', type: 'user', emailAddress: user.email },
+          sendNotificationEmail: false
+        })
+      }
     } catch (permError) {
-      console.error('[files] Failed to set permission to anyone writer:', permError)
+      console.error('[files] Failed to set permission to specific user:', permError)
     }
 
     const metadata = await drive.files.get({ fileId: file.providerFileId, fields: 'webViewLink,webContentLink' })
